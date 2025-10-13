@@ -1,0 +1,9 @@
+
+pydub
+soundfile
+librosa
+noisereduce
+pyaudio
+keyboard
+SpeechRecognition
+textblob
