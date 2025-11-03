@@ -1,39 +1,77 @@
+import os
+import time
+from datetime import datetime
+from dotenv import load_dotenv
 from google import genai as gai
 from google.genai import types
-from ai_safety import check_and_filter
-from datetime import datetime
+from google.genai import errors
+from safety_filter import check_and_filter
 
-def response(self):
-    client = gai.client(api_key=API_KEY)
-    with open("ai_context.txt", "r", encoding="utf-8") as f:
-        context = f.read().strip()
+# Load environment variables
+load_dotenv()
 
-    with open("client_question.txt", "r", encoding="utf-8") as q:
-        question = q.read().strip()
-    
-    geminiresponse = client.models.generate_content(
-        model = "gemini-2.5-flash",
-        config = types.GenerateContentConfig(
-            thinking_config = types.ThinkingConfig(thinking_budget=0),
-            system_instruction= context,
-        ),
-        contents= question
-    )
-    raw_text = geminiresponse.text or ""
+def response():
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("Error: GEMINI_API_KEY not found in .env")
+        return
+
+    # Load the user's question
+    try:
+        with open("client_question.txt", "r", encoding="utf-8") as f:
+            question = f.read().strip()
+    except FileNotFoundError:
+        print("client_question.txt not found.")
+        return
+    if not question:
+        print("No question found.")
+        return
+
+    # Load the system instruction
+    try:
+        with open("ai_context.txt", "r", encoding="utf-8") as sysfile:
+            system_instruction = sysfile.read().strip()
+    except FileNotFoundError:
+        system_instruction = "You are a helpful AI assistant."
+
+    client = gai.Client(api_key=api_key)
+
+    # Retry logic for rate limiting
+    for attempt in range(3):
+        try:
+            geminiresponse = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Content(role="user", parts=[types.Part(text=question)])
+                ],
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction  # ✅ Correct placement
+                )
+            )
+            break
+        except errors.ClientError as e:
+            if "RESOURCE_EXHAUSTED" in str(e):
+                print(f"Rate limit hit. Retrying in {2 ** attempt} seconds...")
+                time.sleep(2 ** attempt)
+            else:
+                raise
+
+    # Extract model response
+    raw_text = geminiresponse.candidates[0].content.parts[0].text.strip()
+
+    # Safety filter check
+    blocked, filtered_text, category = check_and_filter(raw_text)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    blocked, filtered_text, category = check_and_filter(raw_text)
-
     if blocked:
-        print("Filtered")
-        with open("filtered_response.txt","a", encoding="utf-8") as s:
-            s.write(f"[{timestamp}] : ")
-            s.write(filtered_text.strip() + "\n")
-    
+        print("Filtered Response Detected.")
+        with open("filtered_response.txt", "a", encoding="utf-8") as s:
+            s.write(f"[{timestamp}] : {filtered_text}\n")
+        print(filtered_text)
     else:
-        print(raw_text)
+        with open("response.txt",'w', encoding='utf-8') as res:
+            res.write(raw_text.strip())
 
-    
 
-
-    
+if __name__ == "__main__":
+    response()

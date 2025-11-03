@@ -1,9 +1,4 @@
-
-pydub
-soundfile
-librosa
-noisereduce
 pyaudio
-keyboard
 SpeechRecognition
-textblob
+google-genai
+datetime
