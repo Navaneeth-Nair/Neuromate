@@ -22,7 +22,7 @@ const About = () => {
       <section className="py-20 px-6 bg-gradient-hero">
         <div className="container mx-auto text-center max-w-4xl">
           <h1 className="text-5xl md:text-6xl font-heading font-bold mb-8 animate-fade-in">
-            Our Mission
+            Our Mission is to Revolutionize Mental Wellness with AI 
           </h1>
           <p className="text-2xl text-muted-foreground leading-relaxed animate-fade-in">
             We believe AI can enhance human mental well-being, not replace it. 
