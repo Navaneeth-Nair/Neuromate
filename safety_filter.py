@@ -49,7 +49,7 @@ SAFETY_CATEGORIES = {
     ],
 }
 
-# Optional category-specific safe messages
+
 CATEGORY_SAFE_MESSAGES = {
     "self_harm": SAFE_RESPONSE,
     "illegal_activity": "I can't help with instructions for illegal activities.",
@@ -67,11 +67,9 @@ def check_and_filter(text: str) -> Tuple[bool, str, Optional[str]]:
     if not text:
         return False, text, None
     lower = text.lower()
-    # direct substring matches
     for category, phrases in SAFETY_CATEGORIES.items():
         for phrase in phrases:
             if phrase in lower:
-                # Log the blocked reply
                 try:
                     logger = logging.getLogger('ai_safety')
                     if not logger.handlers:
@@ -86,7 +84,6 @@ def check_and_filter(text: str) -> Tuple[bool, str, Optional[str]]:
                     pass
                 safe = CATEGORY_SAFE_MESSAGES.get(category, SAFE_RESPONSE)
                 return True, safe, category
-    # heuristic token-based checks for obfuscated or slightly-misspelled prompts
     tokens = [t.strip(".,!?;:\"'()[]") for t in lower.split()]
     if 'kill' in tokens and ('yourself' in tokens or 'your self' in lower):
         try:
@@ -102,7 +99,6 @@ def check_and_filter(text: str) -> Tuple[bool, str, Optional[str]]:
         except Exception:
             pass
         return True, CATEGORY_SAFE_MESSAGES.get('self_harm', SAFE_RESPONSE), 'self_harm'
-    # patterns like 'you should kill yourself' or 'you should die'
     if 'you' in tokens and ('should' in tokens or 'must' in tokens) and ('kill' in tokens or 'die' in tokens):
         try:
             logger = logging.getLogger('ai_safety')

@@ -7,7 +7,6 @@ from google.genai import types
 from google.genai import errors
 from safety_filter import check_and_filter
 
-# Load environment variables
 load_dotenv()
 
 def response():
@@ -16,7 +15,7 @@ def response():
         print("Error: GEMINI_API_KEY not found in .env")
         return
 
-    # Load the user's question
+   
     try:
         with open("client_question.txt", "r", encoding="utf-8") as f:
             question = f.read().strip()
@@ -27,7 +26,7 @@ def response():
         print("No question found.")
         return
 
-    # Load the system instruction
+    
     try:
         with open("ai_context.txt", "r", encoding="utf-8") as sysfile:
             system_instruction = sysfile.read().strip()
@@ -36,7 +35,7 @@ def response():
 
     client = gai.Client(api_key=api_key)
 
-    # Retry logic for rate limiting
+    
     for attempt in range(3):
         try:
             geminiresponse = client.models.generate_content(
@@ -45,7 +44,7 @@ def response():
                     types.Content(role="user", parts=[types.Part(text=question)])
                 ],
                 config=types.GenerateContentConfig(
-                    system_instruction=system_instruction  # ✅ Correct placement
+                    system_instruction=system_instruction  
                 )
             )
             break
