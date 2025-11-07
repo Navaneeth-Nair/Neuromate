@@ -70,6 +70,8 @@ def response():
     else:
         with open("response.txt",'w', encoding='utf-8') as res:
             res.write(raw_text.strip())
+        with open("logging.txt", "a", encoding='utf-8') as log:
+            log.write(f"[{timestamp}]: [{raw_text.strip()}]\n")
 
 
 if __name__ == "__main__":
