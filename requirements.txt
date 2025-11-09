@@ -3,3 +3,8 @@ SpeechRecognition
 google-genai
 datetime
 redis
+keyboard
+pyttsx3
+dotenv
+ffmpeg
+numpy
