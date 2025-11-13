@@ -5,7 +5,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Linkedin, Twitter, Github, Send, Users } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 
 const Contact = () => {
   const { toast } = useToast();
@@ -87,18 +86,7 @@ const Contact = () => {
     setIsSubmittingBeta(true);
 
     try {
-      const { error } = await supabase
-        .from('beta_signups')
-        .insert([
-          {
-            name: betaFormData.name.trim(),
-            email: betaFormData.email.trim(),
-            phone: betaFormData.phone.trim()
-          }
-        ]);
-
-      if (error) throw error;
-
+      // Simulate form submission
       toast({
         title: "Welcome to Beta!",
         description: "Thank you for signing up! We'll be in touch soon.",
@@ -200,7 +188,7 @@ const Contact = () => {
                 <Mail className="h-8 w-8 text-primary mb-4" />
                 <h3 className="text-xl font-heading font-semibold mb-2">Email</h3>
                 <a href="mailto:support@neuromate.ai" className="text-muted-foreground hover:text-primary transition-colors">
-                  support@neuromate.ai
+                  neuromate07@gmail.com
                 </a>
               </Card>
 
@@ -232,7 +220,7 @@ const Contact = () => {
               </Card>
 
               <Card className="glass-card p-8 bg-gradient-hero">
-                <h3 className="text-xl font-heading font-semibold mb-4">Office Hours</h3>
+                <h3 className="text-xl font-heading font-semibold mb-4">Work Hours</h3>
                 <p className="text-muted-foreground">Monday - Friday</p>
                 <p className="text-muted-foreground">9:00 AM - 6:00 PM (PST)</p>
                 <p className="text-sm text-muted-foreground mt-4">

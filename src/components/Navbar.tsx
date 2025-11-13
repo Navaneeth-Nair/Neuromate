@@ -1,9 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Brain } from "lucide-react";
+import { useEffect } from "react";
 
 const Navbar = () => {
   const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [location.pathname]);
   
   const isActive = (path: string) => location.pathname === path;
   
@@ -38,10 +43,11 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
-            
+            <a href="https://github.com/Navaneeth-Nair/Mindmate.git" target="_blank" rel="noopener noreferrer">
             <Button variant="default" className="bg-gradient-primary hover-glow">
               Download Now
             </Button>
+            </a>
           </div>
         </div>
       </div>

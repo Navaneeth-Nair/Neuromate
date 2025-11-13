@@ -10,6 +10,9 @@ import Features from "./pages/Features";
 import Download from "./pages/Download";
 import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
+import GetDownload from "./pages/GetDownload";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +29,12 @@ const App = () => (
             <Route path="/features" element={<Features />} />
             <Route path="/download" element={<Download />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/get-download" element={
+              <ProtectedRoute>
+                <GetDownload />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>

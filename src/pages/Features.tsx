@@ -75,7 +75,7 @@ const Features = () => {
                   {module.description}
                 </p>
                 <div className="bg-accent/10 p-4 rounded-xl border border-accent/20">
-                  <p className="text-accent-foreground font-semibold">
+                  <p className="text-black font-semibold">
                     ✨ {module.benefits}
                   </p>
                 </div>

@@ -1,12 +1,35 @@
 import { Card } from "@/components/ui/card";
 import { Target, Users, Lightbulb, Shield } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const About = () => {
   const team = [
-    { name: "Alex Chen", role: "Project Lead", description: "Visionary behind NeuroMate's mission" },
-    { name: "Maya Patel", role: "AI Specialist", description: "Leading our machine learning innovations" },
-    { name: "Jordan Smith", role: "Developer", description: "Building the core platform" },
-    { name: "Sam Rivera", role: "UI Designer", description: "Crafting the calm, beautiful experience" }
+    { 
+      name: "Rakesh Telang", 
+      role: "Project Lead / NLP Engineer", 
+      description: "Leads project development and NLP integration." 
+    },
+    { 
+      name: "Abhijit Patil", 
+      role: "Backend Developer", 
+      description: "Handles backend systems and data security." 
+    },
+    { 
+      name: "Prajakta Patil", 
+      role: "Frontend Developer", 
+      description: "Designs the UI and 2D avatar interface." 
+    },
+    { 
+      name: "Navneeth Nair", 
+      role: "AI & Emotion Engineer", 
+      description: "Develops emotion recognition module." 
+    },
+    { 
+      name: "Jayeed Tamboli", 
+      role: "Documentation & Testing Lead", 
+      description: "Manages documentation and testing." 
+    },
   ];
 
   const values = [
@@ -42,14 +65,21 @@ const About = () => {
               Passionate minds building the future of mental wellness
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+          {/* Flexbox layout centers the final row automatically */}
+          <div className="flex flex-wrap justify-center gap-8">
             {team.map((member, index) => (
-              <Card key={index} className="glass-card p-6 text-center hover-glow">
-                <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4" />
-                <h3 className="text-xl font-heading font-semibold mb-2">{member.name}</h3>
-                <p className="text-primary font-semibold mb-2">{member.role}</p>
-                <p className="text-muted-foreground text-sm">{member.description}</p>
-              </Card>
+              <div
+                key={index}
+                className="w-full sm:w-1/2 md:w-1/3 max-w-sm"
+              >
+                <Card className="glass-card p-6 text-center hover-glow h-full">
+                  <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4" />
+                  <h3 className="text-xl font-heading font-semibold mb-2">{member.name}</h3>
+                  <p className="text-primary font-semibold mb-2">{member.role}</p>
+                  <p className="text-muted-foreground text-sm">{member.description}</p>
+                </Card>
+              </div>
             ))}
           </div>
         </div>
@@ -60,15 +90,15 @@ const About = () => {
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-heading font-bold mb-4">
-              Our Journey
+              Our Journey & Future
             </h2>
           </div>
           <div className="max-w-4xl mx-auto">
             <div className="space-y-8">
               {[
-                { year: "2024", title: "Concept", description: "The idea of an AI mental wellness companion was born" },
-                { year: "2025", title: "Prototype", description: "Beta version launched with 100 early adopters" },
-                { year: "2026", title: "Launch", description: "Full public release with all five modules" }
+                { year: "JULY 2025", title: "Concept", description: "The idea of an AI mental wellness companion was born" },
+                { year: "NOV 2025", title: "Prototype", description: "Beta version launched with five modules for 20 early adopters" },
+                { year: "JUNE 2026", title: "Launch", description: "Full public release with all ten modules" }
               ].map((milestone, index) => (
                 <div key={index} className="flex gap-8 items-center">
                   <div className="text-5xl font-heading font-bold gradient-text w-32 text-right">

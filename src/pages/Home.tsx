@@ -106,19 +106,19 @@ const Home = () => {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
-                quote: "NeuroMate keeps me calm before big meetings.",
-                author: "Sarah M.",
-                role: "Product Manager"
+                quote: "NeuroMate has high pontential to revolutionize mental health support.",
+                author: "Jayeed Tamboli",
+                role: "AIML Engineer"
               },
               {
-                quote: "The focus sessions have transformed my productivity.",
-                author: "James L.",
-                role: "Developer"
+                quote: "The focus sessions can transform my productivity.",
+                author: "Shahid Shaikh",
+                role: "Engineering Student"
               },
               {
-                quote: "I finally have a tool that understands my mental health journey.",
-                author: "Emma R.",
-                role: "Designer"
+                quote: "Finally a tool is being made that understands my mental health journey.",
+                author: "Abhi Kore",
+                role: "Freelancer"
               }
             ].map((testimonial, index) => (
               <div key={index} className="glass-card p-8 rounded-2xl">
