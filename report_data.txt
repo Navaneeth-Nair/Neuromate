@@ -1,0 +1,618 @@
+================================================================================
+                    NEUROMATE IMPLEMENTATION DETAILS
+           Complete Technology Stack & Implementation Explanation
+================================================================================
+
+Last Updated: 2025-01-27
+Project: NeuroMate - AI-Powered Mental Well-being & Productivity Companion
+
+================================================================================
+                        TECHNOLOGY STACK OVERVIEW
+================================================================================
+
+Core Language & Runtime:
+- Python 3.13+
+  - Primary programming language
+  - Used for entire CLI application
+  - Cross-platform compatibility (Windows, macOS, Linux)
+
+================================================================================
+1. SPEECH RECOGNITION (STT - Speech-to-Text)
+================================================================================
+
+Technologies Used:
+
+1.1 SpeechRecognition Library
+    Package: SpeechRecognition (v3.10+)
+    Purpose: Converts voice input to text
+    Implementation File: speechrecog.py
+
+    How it works:
+    - Uses Google Speech Recognition API (cloud-based)
+    - Processes audio files (WAV format)
+    - Supports multiple languages
+    - Handles recognition errors gracefully
+
+    Code Implementation:
+    import speech_recognition as sr
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(filename) as source:
+        audio = recognizer.record(source)
+    text = recognizer.recognize_google(audio)
+
+    Features:
+    - Cloud-based recognition (Google API)
+    - High accuracy
+    - Multi-language support
+    - Error handling for recognition failures
+
+1.2 PyAudio
+    Package: pyaudio
+    Purpose: Audio I/O for recording
+    Implementation File: speechrecog.py
+
+    How it works:
+    - Real-time audio capture from microphone
+    - Configurable sample rate (16kHz)
+    - Cross-platform audio access
+    - Records while key is held (Enter key)
+
+    Code Implementation:
+    import pyaudio
+    p = pyaudio.PyAudio()
+    stream = p.open(
+        format=pyaudio.paInt16,
+        channels=1,
+        rate=16000,
+        input=True
+    )
+
+    Features:
+    - Real-time audio capture
+    - Configurable sample rate (16kHz)
+    - Cross-platform audio access
+    - Records while key is held (Enter key)
+
+1.3 Wave Module (Built-in)
+    Purpose: WAV file handling
+    Implementation: Saves recorded audio as WAV files
+
+================================================================================
+2. TEXT-TO-SPEECH (TTS)
+================================================================================
+
+Technologies Used:
+
+2.1 pyttsx3
+    Package: pyttsx3
+    Purpose: Offline text-to-speech engine
+    Implementation File: tts.py
+
+    How it works:
+    - Uses system's built-in TTS engines
+    - Works offline (no internet required)
+    - Supports multiple voices
+    - Configurable rate and volume
+
+    Code Implementation:
+    import pyttsx3
+    engine = pyttsx3.init()
+    engine.setProperty("rate", 250)  # Speed
+    engine.setProperty("volume", 1.0)  # Volume
+    engine.say(text)
+    engine.runAndWait()
+
+    Mood-Adaptive Tones:
+    - Calm: Rate 200, Volume 0.8 (for low mood)
+    - Cheerful: Rate 280, Volume 1.0 (for high mood)
+    - Focused: Rate 250, Volume 0.9 (for planning/work)
+    - Neutral: Rate 250, Volume 1.0 (default)
+
+    Features:
+    - Offline operation
+    - Mood-adaptive tones
+    - Cross-platform voice selection
+    - No internet required
+
+2.2 Keyboard Library
+    Package: keyboard
+    Purpose: Blocks keys during TTS to prevent interruptions
+    Implementation File: tts.py
+
+    Features:
+    - Blocks Enter/Esc keys during speech
+    - Prevents accidental interruptions
+    - Windows-compatible
+
+================================================================================
+3. ARTIFICIAL INTELLIGENCE
+================================================================================
+
+Technologies Used:
+
+3.1 Google Gemini API
+    Package: google-genai
+    Purpose: AI conversation and planning
+    Implementation Files: ai_chat.py, ai_planner.py
+
+    How it works:
+    - REST API calls to Google Gemini
+    - Natural language understanding
+    - Context-aware conversations
+    - Daily planning generation
+
+    Code Implementation:
+    from google import genai as gai
+    from google.genai import types
+    
+    client = gai.Client(api_key=api_key)
+    model = client.models.generate_content(
+        model='gemini-1.5-flash',
+        contents=contents
+    )
+
+    Features:
+    - Natural language understanding
+    - Context-aware conversations
+    - Daily planning generation
+    - Personality: "Kasane Teto" (empathetic AI companion)
+    - Conversation history integration
+    - Safety filtering before responses
+
+    API Integration:
+    - REST API calls to Google Gemini
+    - API key stored in .env file
+    - Error handling for API failures
+    - Rate limiting considerations
+
+3.2 python-dotenv
+    Package: python-dotenv
+    Purpose: Environment variable management
+    Implementation File: ai_chat.py
+
+    How it works:
+    from dotenv import load_dotenv
+    import os
+    
+    load_dotenv()
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    Features:
+    - Secure API key storage
+    - .env file for configuration
+    - No hardcoded credentials
+
+================================================================================
+4. DATABASE & DATA PERSISTENCE
+================================================================================
+
+Technologies Used:
+
+4.1 SQLite3 (Built-in)
+    Purpose: Embedded database
+    Implementation File: database.py
+
+    How it works:
+    import sqlite3
+    
+    conn = sqlite3.connect("neuromate.db")
+    cursor = conn.cursor()
+    cursor.execute("CREATE TABLE IF NOT EXISTS tasks (...)")
+
+    Database Schema:
+    - tasks: Task management
+    - mood_entries: Mood tracking
+    - journal_entries: Journal entries
+    - habits: Habit tracking
+    - productivity_entries: Productivity metrics
+
+    Features:
+    - File-based (neuromate.db)
+    - No server required
+    - ACID compliance
+    - SQL support
+    - Cross-platform
+
+4.2 Cryptography Library
+    Package: cryptography
+    Purpose: AES-256 encryption
+    Implementation File: database.py
+
+    How it works:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    
+    # Generate encryption key
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b'neuromate_salt',
+        iterations=100000
+    )
+    cipher = Fernet(key)
+    encrypted_data = cipher.encrypt(data.encode())
+
+    Features:
+    - AES-256 encryption
+    - PBKDF2 key derivation
+    - Encrypted data storage (BLOB columns)
+    - Key file management (db_key.key)
+    - Password-based encryption support
+
+    Security:
+    - 100,000 PBKDF2 iterations
+    - SHA-256 hashing
+    - Fernet symmetric encryption
+    - Key file permissions (600)
+
+================================================================================
+5. COMMAND PROCESSING & NLP
+================================================================================
+
+Technologies Used:
+
+5.1 Regular Expressions (Built-in)
+    Module: re
+    Purpose: Pattern matching for command parsing
+    Implementation File: command_parser.py
+
+    How it works:
+    import re
+    
+    patterns = {
+        CommandIntent.ADD_TASK: [
+            r"add\s+(?:a\s+)?task\s+(?:called\s+)?(.+)",
+            r"create\s+(?:a\s+)?task\s+(?:called\s+)?(.+)",
+        ]
+    }
+
+    Features:
+    - Intent recognition
+    - Entity extraction (task names, dates, mood scores)
+    - Natural language command parsing
+    - Multiple pattern matching per intent
+
+5.2 Enum (Built-in)
+    Purpose: Command intent types
+    Implementation File: command_parser.py
+
+    Command Intents:
+    - ADD_TASK, SHOW_TASKS, COMPLETE_TASK
+    - DELETE_TASK
+    - SET_MOOD, CHECK_MOOD
+    - GET_PLAN, SUGGEST_TASKS, WHAT_SHOULD_I_DO
+    - CHECK_PRODUCTIVITY, PRODUCTIVITY_INSIGHTS
+    - REPEAT, UNDO
+    - UNKNOWN
+
+================================================================================
+6. SAFETY & CONTENT FILTERING
+================================================================================
+
+Technologies Used:
+
+6.1 Logging Module (Built-in)
+    Purpose: Safety event logging
+    Implementation File: safety_filter.py
+
+    How it works:
+    import logging
+    
+    logger = logging.getLogger('ai_safety')
+    handler = logging.FileHandler('ai_safety.log')
+    logger.info(f"Blocked reply category='{category}': {text}")
+
+    Features:
+    - Logs blocked content
+    - Categorizes safety violations
+    - File-based logging (ai_safety.log)
+
+6.2 Heuristic Filtering
+    Purpose: Local content safety filter
+    Implementation File: safety_filter.py
+
+    Categories:
+    - Self-harm detection
+    - Violence detection
+    - Illegal activity detection
+    - Sexual content detection
+
+    How it works:
+    - Keyword/phrase matching
+    - Pattern-based detection
+    - Safe response replacement
+    - Category classification
+
+================================================================================
+7. DATA MODELS & ORM
+================================================================================
+
+Technologies Used:
+
+7.1 Python Classes (Built-in)
+    Purpose: Object-relational mapping
+    Implementation File: models.py
+
+    Model Classes:
+    - Task: Task CRUD operations
+    - MoodEntry: Mood tracking
+    - JournalEntry: Journal entries
+    - ProductivityEntry: Productivity metrics
+
+    Features:
+    - CRUD operations
+    - Type hints
+    - Data validation
+    - Dictionary conversion
+    - Date/time handling
+
+================================================================================
+8. PRODUCTIVITY & ANALYTICS
+================================================================================
+
+Technologies Used:
+
+8.1 DateTime Module (Built-in)
+    Purpose: Date/time operations
+    Implementation Files: productivity_tracker.py, ai_planner.py
+
+    Features:
+    - ISO format timestamps
+    - Date calculations
+    - Time-of-day analysis
+    - Trend analysis
+
+8.2 Statistical Calculations
+    Purpose: Productivity correlation
+    Implementation File: productivity_tracker.py
+
+    Formulas:
+    - Productivity Score = (Task Completion × 50%) + (Mood Multiplier × 30%) + (Focus Hours × 20%)
+    - Pearson correlation coefficient
+    - Average calculations
+    - Trend analysis
+
+================================================================================
+9. FILE I/O & DATA EXCHANGE
+================================================================================
+
+Technologies Used:
+
+9.1 JSON Module (Built-in)
+    Purpose: Data serialization
+    Implementation Files: backup.py, conversation_context.py
+
+    Features:
+    - Backup/export functionality
+    - Conversation history storage
+    - Data import/export
+    - Human-readable format
+
+9.2 File Operations (Built-in)
+    Purpose: Text file handling
+    Implementation: Multiple files
+
+    Files Used:
+    - client_question.txt: User input
+    - response.txt: AI response
+    - ai_context.txt: AI personality
+    - conversation_history.json: Conversation log
+    - ai_safety.log: Safety events
+
+================================================================================
+10. TESTING & VALIDATION
+================================================================================
+
+Technologies Used:
+
+10.1 Python unittest (Built-in)
+     Purpose: Unit testing
+     Implementation Files: test_db.py, test_all_features.py
+
+     Features:
+     - Automated testing
+     - Feature validation
+     - Error detection
+     - Test reporting
+
+10.2 Batch Scripting
+     Purpose: Windows batch testing
+     Implementation File: test_all_features.bat
+
+     Features:
+     - Sequential test execution
+     - Error handling
+     - Progress tracking
+     - Summary reporting
+
+================================================================================
+                        ARCHITECTURE OVERVIEW
+================================================================================
+
+Data Flow:
+
+User Voice Input
+    ↓
+PyAudio (Recording)
+    ↓
+SpeechRecognition (STT)
+    ↓
+Command Parser (Intent Extraction)
+    ↓
+Command Handler (Execution)
+    ↓
+├─→ Database (SQLite) ← Encrypted Storage
+├─→ AI Chat (Gemini API)
+├─→ AI Planner (Planning)
+└─→ TTS Engine (Response)
+    ↓
+User Audio Output
+
+Component Interaction:
+
+┌─────────────────────────────────────┐
+│         Main Application            │
+├─────────────────────────────────────┤
+│  Speech Recognition (STT)           │
+│  ├─ PyAudio                         │
+│  └─ SpeechRecognition               │
+├─────────────────────────────────────┤
+│  Command Processing                 │
+│  ├─ Command Parser (Regex)          │
+│  └─ Command Handler                 │
+├─────────────────────────────────────┤
+│  AI Services                        │
+│  ├─ Google Gemini API               │
+│  ├─ AI Planner                      │
+│  └─ Safety Filter                   │
+├─────────────────────────────────────┤
+│  Data Layer                         │
+│  ├─ SQLite Database                 │
+│  ├─ Cryptography (Encryption)       │
+│  └─ Models (ORM)                    │
+├─────────────────────────────────────┤
+│  Text-to-Speech (TTS)               │
+│  └─ pyttsx3                         │
+└─────────────────────────────────────┘
+
+================================================================================
+                    TECHNOLOGY SUMMARY TABLE
+================================================================================
+
+Category              | Technology          | Purpose                    | Package
+----------------------|---------------------|----------------------------|------------------
+Language              | Python 3.13+        | Core runtime               | Built-in
+STT                   | SpeechRecognition   | Voice-to-text              | SpeechRecognition
+Audio I/O             | PyAudio             | Audio recording            | pyaudio
+TTS                   | pyttsx3             | Text-to-speech             | pyttsx3
+AI                    | Google Gemini       | AI conversations           | google-genai
+Database              | SQLite3             | Data storage               | Built-in
+Encryption            | Cryptography        | AES-256 encryption         | cryptography
+Config                | python-dotenv       | Environment vars           | python-dotenv
+Input Control         | keyboard            | Key blocking               | keyboard
+NLP                   | Regex               | Command parsing            | Built-in (re)
+Data                  | JSON                | Serialization              | Built-in
+Logging               | Logging             | Event logging               | Built-in
+
+================================================================================
+                    DEPENDENCIES INSTALLATION
+================================================================================
+
+Installation Command:
+    pip install -r requirements.txt
+
+Required Packages:
+    - pyaudio: Audio I/O
+    - SpeechRecognition: Speech-to-text
+    - google-genai: Google Gemini API
+    - python-dotenv: Environment variables
+    - pyttsx3: Text-to-speech
+    - keyboard: Keyboard control
+    - cryptography: Encryption
+
+================================================================================
+                    IMPLEMENTATION HIGHLIGHTS
+================================================================================
+
+1. Offline-First Design
+   - Works without internet (except Gemini API calls)
+   - Local data storage
+   - Offline TTS engine
+
+2. Security
+   - AES-256 encryption for sensitive data
+   - Secure API key management
+   - Encrypted database storage
+
+3. Voice Interaction
+   - Full voice command support
+   - Natural language processing
+   - Intent recognition
+
+4. AI-Powered
+   - Intelligent planning
+   - Context-aware conversations
+   - Mood-adaptive responses
+
+5. Mood-Adaptive
+   - TTS adapts to user mood
+   - Planning adapts to mood
+   - Adaptive notifications
+
+6. Safety-First
+   - Content filtering
+   - Harmful response detection
+   - Safety logging
+
+7. Modular Design
+   - Separated concerns
+   - Maintainable codebase
+   - Extensible architecture
+
+8. Cross-Platform
+   - Works on Windows, macOS, Linux
+   - Platform-specific optimizations
+   - Consistent user experience
+
+================================================================================
+                            FILE STRUCTURE
+================================================================================
+
+neuroamte/
+├── main.py                 # Entry point
+├── speechrecog.py          # Speech recognition
+├── ai_chat.py             # AI conversation
+├── tts.py                 # Text-to-speech
+├── safety_filter.py       # Content filtering
+├── command_parser.py      # Voice command parsing
+├── command_handler.py     # Command execution
+├── conversation_context.py # Conversation history
+├── database.py            # Encrypted database wrapper
+├── models.py              # Data models (Task, Mood, Journal)
+├── ai_planner.py          # AI planning assistant
+├── productivity_tracker.py # Productivity tracking
+├── notification_system.py  # Adaptive notifications
+├── backup.py              # Backup/export
+├── db_init.py             # Database initialization
+├── db_viewer.py           # Database viewer
+├── quick_view.py          # Quick database summary
+├── test_db.py             # Database tests
+├── text_input.py          # Text input mode
+├── quick_text.py          # Quick text command
+├── test_all_features.py   # Comprehensive tests
+├── test_all_features.bat  # Windows batch tests
+├── ai_context.txt         # AI personality definition
+├── requirements.txt       # Dependencies
+├── .env                   # Environment variables (API keys)
+└── neuromate.db           # SQLite database
+
+================================================================================
+                            DATABASE SCHEMA
+================================================================================
+
+Tables:
+1. tasks
+   - id (PK), title, description, due_date, priority, status
+   - created_at, updated_at, encrypted_data
+
+2. mood_entries
+   - id (PK), mood_score, mood_text, notes
+   - created_at, encrypted_data
+
+3. journal_entries
+   - id (PK), content, entry_type
+   - created_at, encrypted_data
+
+4. habits
+   - id (PK), name, description, frequency, streak_count
+   - created_at, updated_at, encrypted_data
+
+5. productivity_entries
+   - id (PK), date (UNIQUE), productivity_score
+   - tasks_completed, tasks_total, avg_mood_score, focus_hours
+   - notes, created_at, updated_at, encrypted_data
+
+================================================================================
+                            END OF REPORT
+================================================================================
+

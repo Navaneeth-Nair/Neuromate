@@ -1,0 +1,275 @@
+Phase 1 — Core Planner & Encrypted DB (MVP foundation)
+
+Goal: working local task manager with encrypted persistence.
+
+Epic 1.1 — Database & models
+
+Implement encrypted SQLite wrapper (AES-256).
+
+Acceptance: DB opens, read/write encrypted; sample test data decrypts.
+
+Create Task, Tag, Habit, Journal schemas.
+
+Acceptance: CRUD operations pass unit tests.
+
+Epic 1.2 — Backend API
+
+Build FastAPI service with REST endpoints: tasks, tags, journal, stats.
+
+Acceptance: endpoints documented (OpenAPI) and all return correct responses.
+
+Authentication stub (local device identity).
+
+Acceptance: minimal auth to protect APIs (no cloud dependency).
+
+Epic 1.3 — Frontend basic app
+
+Electron + React app skeleton.
+
+Acceptance: app boots, connects to local API.
+
+Task list UI (create/view/edit/delete).
+
+Acceptance: tasks show in UI and persist.
+
+Epic 1.4 — Local storage & sync opt-in
+
+Implement local backup & export (JSON).
+
+Acceptance: user exports/imports data successfully.
+
+Design opt-in cloud backup flow (placeholder).
+
+Acceptance: UI/UX mock present (no cloud calls).
+
+QA / Acceptance for Phase 1:
+
+End-to-end test: create task in UI → saved encrypted in DB → app shows it after restart.
+
+Phase 2 — Voice & AI Planning (LLM + STT/TTS)
+
+Goal: allow voice/text planning; AI suggest daily plans.
+
+Epic 2.1 — STT integration
+
+Integrate Parakeet STT (or equivalent) into app.
+
+Acceptance: voice → text works locally; sample command recognized.
+
+Create voice command parser & intent mapping.
+
+Acceptance: commands like “add meeting at 5 PM” create correct task.
+
+Epic 2.2 — TTS integration
+
+Integrate Coqui TTS and voice tone presets (calm, cheerful, focused).
+
+Acceptance: system can read notifications and reflection prompts in chosen tone.
+
+Epic 2.3 — LLM planning assistant
+
+Integrate chosen local LLM (7B) or cloud fallback.
+
+Acceptance: LLM returns suggested daily plan given task list + mood input.
+
+Implement AI planner API (input: tasks + constraints + mood → output: plan + priorities).
+
+Acceptance: generated plan matches constraints in tests.
+
+Epic 2.4 — Voice UX flows
+
+“Quick add” via voice flow (confirmation & undo).
+
+Acceptance: voice add → user confirmation → task saved.
+
+“What’s my plan for today?” readout flow.
+
+Acceptance: app reads plan via TTS.
+
+QA / Acceptance for Phase 2:
+
+Voice latency measured; acceptable for local setup. (Record measured values for CI.)
+
+Phase 3 — Mood Integration & Smart Prioritization
+
+Goal: combine Mind side mood scores with tasks for adaptive prioritization.
+
+Epic 3.1 — Mood API & data contracts
+
+Define API for Mind → Work data (daily mood score, metadata).
+
+Acceptance: API contract document + mock data.
+
+Implement import adapter to read mood entries.
+
+Acceptance: mood entries appear in local DB.
+
+Epic 3.2 — Mood-task correlation engine
+
+Implement simple correlation algorithm (productivity score formula + mood multiplier).
+
+Acceptance: computed productivity score stored per day.
+
+Epic 3.3 — Smart prioritization logic
+
+Add “Focus Score” generation for tasks (0–100) using urgency, deadline, energy, mood.
+
+Acceptance: sample tasks reorder correctly in unit tests.
+
+UI: show recommended order and explain rationale (short sentence).
+
+Acceptance: UI shows explanation beneath prioritized list.
+
+Epic 3.4 — Adaptive notifications
+
+Mood-based tone & notification scheduling (e.g., soft reminders when stressed).
+
+Acceptance: notification change observed when mood low.
+
+QA / Acceptance for Phase 3:
+
+Simulated mood changes reflect on suggestions & notifications.
+
+Phase 4 — Productivity Tracking & Insights Dashboard
+
+Goal: visualize trends, enable reflection, and export insights.
+
+Epic 4.1 — Telemetry & logging (local)
+
+Implement task completion logging (timestamps, durations, self-rated focus).
+
+Acceptance: logs exist for each completed task.
+
+Epic 4.2 — Analytics engine
+
+Implement daily/week aggregates: tasks planned/completed, focus time, productivity score.
+
+Acceptance: aggregated endpoints return expected results.
+
+Epic 4.3 — Dashboard UI
+
+Charts: Mood vs Productivity, Weekly trend, Streaks, Word cloud for journal.
+
+Acceptance: charts render and update with sample data.
+
+Export daily summary (PDF/JSON).
+
+Acceptance: export file downloads and contains correct summary.
+
+Epic 4.4 — Reflection workflows
+
+End-of-day voice prompt & journal entry flow + STT for dictated reflections.
+
+Acceptance: reflection saved and appears in dashboard.
+
+QA / Acceptance for Phase 4:
+
+Dashboard shows correct numbers after a week of simulated activity.
+
+Phase 5 — Motivation Engine & Adaptive Suggestions
+
+Goal: fine-tune empathy & personalised nudges.
+
+Epic 5.1 — Tone adaptation rules
+
+Map mood ranges to TTS tone/phrasing templates.
+
+Acceptance: given mood X, chosen tone is used.
+
+Epic 5.2 — Motivational dialogue generator
+
+Templates + LLM-generated short dialogues tailored to user context.
+
+Acceptance: sample dialogues pass content QA (no harmful suggestions).
+
+Epic 5.3 — Routine recommender (basic)
+
+LLM suggests simple routines from recent trends (e.g., “Try 90-minute deep work then 20-minute break”).
+
+Acceptance: generated routine references user’s own data.
+
+Epic 5.4 — Safety & guardrails
+
+Avoid overreach (no clinical advice); include fallback suggestions to seek help if persistent low mood.
+
+Acceptance: safety checklist and tests.
+
+QA / Acceptance for Phase 5:
+
+Human review of motivational messages for tone & appropriateness.
+
+Phase 6 — Testing, Beta & Refinement
+
+Goal: polish UX, fix bugs, measure targets with real users.
+
+Epic 6.1 — Unit, integration & E2E tests
+
+Coverage targets per module.
+
+Acceptance: tests run in CI; critical paths covered.
+
+Epic 6.2 — Internal alpha testing
+
+Small internal group uses app; collect feedback.
+
+Acceptance: bug tracker items created and triaged.
+
+Epic 6.3 — Closed beta (external)
+
+Recruit beta users; run 2–4 week pilot, collect NPS & qualitative feedback.
+
+Acceptance: beta report with metrics and feature requests.
+
+Epic 6.4 — Performance & scaling
+
+Measure voice response latency, LLM inference times; optimize quantization/caching.
+
+Acceptance: documented performance baseline and optimization tasks.
+
+Epic 6.5 — Accessibility & localization
+
+Basic accessibility checks (keyboard nav, screen reader labels); prepare for locale support.
+
+Acceptance: accessibility audit report.
+
+QA / Acceptance for Phase 6:
+
+Beta satisfaction ≥ target threshold (your chosen KPI) or iterate.
+
+Phase 7 — Launch & Post-Launch
+
+Goal: release MVP, monitor, and plan next features.
+
+Epic 7.1 — Release prep
+
+Packaging installers (Windows Electron build), release notes, privacy policy.
+
+Acceptance: signed installer + published release asset.
+
+Epic 7.2 — Monitoring & support
+
+Telemetry for crashes (local-first), basic in-app support reporting.
+
+Acceptance: crash reports route to inbox/project.
+
+Epic 7.3 — Roadmap for v2
+
+Prioritise add-ons (Pomodoro, calendar sync, energy estimator, gamification).
+
+Acceptance: v2 commitments + backlog.
+
+Cross-cutting tasks (ongoing)
+
+These should be in the backlog and scheduled continuously.
+
+Documentation: user guide, dev docs, API spec.
+
+Security reviews & penetration checks.
+
+GDPR / privacy compliance check (if applicable).
+
+UX research sessions (monthly).
+
+Automated backups & restore tests.
+
+Localization & i18n readiness.
