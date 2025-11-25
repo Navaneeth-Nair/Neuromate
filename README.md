@@ -45,7 +45,7 @@ Built with care to promote calmness, growth, and self-awareness — not just eff
 ##  Website
 
 The official NeuroMate website serves as:
-- A **landing platform** for new users  
+- A **Landing platform** for new users  
 - A **download hub** for the desktop app  
 - A **community space** for engagement and feedback  
 
