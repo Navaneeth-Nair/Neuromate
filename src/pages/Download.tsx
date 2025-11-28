@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Download as DownloadIcon, MonitorSmartphone, CheckCircle } from "lucide-react";
-import { Link } from "react-router-dom";
 
 const Download = () => {
   const systemRequirements = [
@@ -45,12 +44,17 @@ const Download = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <Link to="/get-download">
+            <a 
+              href="https://github.com/Navaneeth-Nair/Neuromate" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
               <Button size="lg" className="bg-gradient-primary hover-glow text-foreground font-heading font-semibold text-lg px-12 py-6 h-auto">
                 <DownloadIcon className="mr-3 h-6 w-6" />
                 Download for Windows
               </Button>
-            </Link>
+            </a>
             <div className="text-muted-foreground">
               <p className="text-sm">Version 1.0.0 • 145 MB</p>
             </div>

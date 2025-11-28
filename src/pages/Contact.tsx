@@ -5,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, Linkedin, Twitter, Github, Send, Users } from "lucide-react";
+import { betaAPI, contactAPI } from "@/lib/api";
 
 const Contact = () => {
   const { toast } = useToast();
@@ -20,11 +21,12 @@ const Contact = () => {
     phone: ""
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmittingBeta, setIsSubmittingBeta] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
     if (!formData.name || !formData.email || !formData.message) {
       toast({
@@ -35,14 +37,32 @@ const Contact = () => {
       return;
     }
 
-    // Simulate form submission
-    toast({
-      title: "Message Sent!",
-      description: "Thank you! We'll reply soon.",
-    });
-    
-    // Reset form
-    setFormData({ name: "", email: "", message: "" });
+    setIsSubmitting(true);
+
+    try {
+      await contactAPI.sendMessage(
+        formData.name.trim(),
+        formData.email.trim(),
+        formData.message.trim()
+      );
+
+      toast({
+        title: "Message Sent!",
+        description: "Thank you! We'll reply soon.",
+      });
+
+      // Reset form
+      setFormData({ name: "", email: "", message: "" });
+    } catch (error: any) {
+      console.error('Contact message error:', error);
+      toast({
+        title: "Submission Failed",
+        description: "There was an error sending your message. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -61,7 +81,7 @@ const Contact = () => {
 
   const handleBetaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Basic validation
     if (!betaFormData.name || !betaFormData.email || !betaFormData.phone) {
       toast({
@@ -86,12 +106,17 @@ const Contact = () => {
     setIsSubmittingBeta(true);
 
     try {
-      // Simulate form submission
+      await betaAPI.signup(
+        betaFormData.name.trim(),
+        betaFormData.email.trim(),
+        betaFormData.phone.trim()
+      );
+
       toast({
         title: "Welcome to Beta!",
         description: "Thank you for signing up! We'll be in touch soon.",
       });
-      
+
       // Reset form
       setBetaFormData({ name: "", email: "", phone: "" });
     } catch (error: any) {
@@ -140,7 +165,7 @@ const Contact = () => {
                     className="glass-card"
                   />
                 </div>
-                
+
                 <div>
                   <label htmlFor="email" className="block text-sm font-semibold mb-2">
                     Email
@@ -155,7 +180,7 @@ const Contact = () => {
                     className="glass-card"
                   />
                 </div>
-                
+
                 <div>
                   <label htmlFor="message" className="block text-sm font-semibold mb-2">
                     Message
@@ -170,14 +195,15 @@ const Contact = () => {
                     className="glass-card resize-none"
                   />
                 </div>
-                
-                <Button 
-                  type="submit" 
-                  size="lg" 
+
+                <Button
+                  type="submit"
+                  size="lg"
                   className="w-full bg-gradient-primary hover-glow text-foreground font-heading font-semibold"
+                  disabled={isSubmitting}
                 >
                   <Send className="mr-2 h-5 w-5" />
-                  Send Message
+                  {isSubmitting ? "Sending..." : "Send Message"}
                 </Button>
               </form>
             </Card>
@@ -187,7 +213,7 @@ const Contact = () => {
               <Card className="glass-card p-8 hover-glow">
                 <Mail className="h-8 w-8 text-primary mb-4" />
                 <h3 className="text-xl font-heading font-semibold mb-2">Email</h3>
-                <a href="mailto:support@neuromate.ai" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="mailto:neuromate07@gmail.com" className="text-muted-foreground hover:text-primary transition-colors">
                   neuromate07@gmail.com
                 </a>
               </Card>
@@ -195,22 +221,22 @@ const Contact = () => {
               <Card className="glass-card p-8">
                 <h3 className="text-xl font-heading font-semibold mb-4">Connect with us</h3>
                 <div className="flex gap-4">
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="p-3 rounded-full bg-gradient-primary hover-glow transition-all"
                     aria-label="Twitter"
                   >
                     <Twitter className="h-6 w-6 text-foreground" />
                   </a>
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="p-3 rounded-full bg-gradient-primary hover-glow transition-all"
                     aria-label="LinkedIn"
                   >
                     <Linkedin className="h-6 w-6 text-foreground" />
                   </a>
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="p-3 rounded-full bg-gradient-primary hover-glow transition-all"
                     aria-label="GitHub"
                   >
@@ -220,7 +246,7 @@ const Contact = () => {
               </Card>
 
               <Card className="glass-card p-8 bg-gradient-hero">
-                <h3 className="text-xl font-heading font-semibold mb-4">Work Hours</h3>
+                <h3 className="text-xl font-heading font-semibold mb-4">Working Hours</h3>
                 <p className="text-muted-foreground">Monday - Friday</p>
                 <p className="text-muted-foreground">9:00 AM - 6:00 PM (PST)</p>
                 <p className="text-sm text-muted-foreground mt-4">
@@ -261,7 +287,7 @@ const Contact = () => {
                   required
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="beta-email" className="block text-sm font-semibold mb-2">
                   Email Address
@@ -293,10 +319,10 @@ const Contact = () => {
                   required
                 />
               </div>
-              
-              <Button 
-                type="submit" 
-                size="lg" 
+
+              <Button
+                type="submit"
+                size="lg"
                 className="w-full bg-gradient-primary hover-glow text-foreground font-heading font-semibold"
                 disabled={isSubmittingBeta}
               >

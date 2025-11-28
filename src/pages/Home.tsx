@@ -106,19 +106,19 @@ const Home = () => {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
-                quote: "NeuroMate has high pontential to revolutionize mental health support.",
-                author: "Jayeed Tamboli",
-                role: "AIML Engineer"
-              },
-              {
-                quote: "The focus sessions can transform my productivity.",
+                quote: "NeuroMate is the ai that i have been waiting for.",
                 author: "Shahid Shaikh",
-                role: "Engineering Student"
+                role: "b.tech AIML student"
               },
               {
-                quote: "Finally a tool is being made that understands my mental health journey.",
-                author: "Abhi Kore",
+                quote: "productivity tools are going to be very useful.",
+                author: "Ajinkya Monde",
                 role: "Freelancer"
+              },
+              {
+                quote: "I can't wait to see what this app can do.",
+                author: "Harshal Khobragade",
+                role: "b.tech AIML student"
               }
             ].map((testimonial, index) => (
               <div key={index} className="glass-card p-8 rounded-2xl">
@@ -163,7 +163,7 @@ const Home = () => {
           <h2 className="text-4xl md:text-5xl font-heading font-bold text-foreground">
             Start your journey to a better mind with NeuroMate
           </h2>
-          <Link to="/download">
+          <Link to="/download" className="mt-4">
             <Button size="lg" variant="outline" className="bg-background hover:bg-background/90 border-none text-foreground font-heading font-semibold text-lg px-8">
               Download for Windows
             </Button>

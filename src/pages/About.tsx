@@ -1,35 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { Target, Users, Lightbulb, Shield } from "lucide-react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 
 const About = () => {
   const team = [
-    { 
-      name: "Rakesh Telang", 
-      role: "Project Lead / NLP Engineer", 
-      description: "Leads project development and NLP integration." 
-    },
-    { 
-      name: "Abhijit Patil", 
-      role: "Backend Developer", 
-      description: "Handles backend systems and data security." 
-    },
-    { 
-      name: "Prajakta Patil", 
-      role: "Frontend Developer", 
-      description: "Designs the UI and 2D avatar interface." 
-    },
-    { 
-      name: "Navneeth Nair", 
-      role: "AI & Emotion Engineer", 
-      description: "Develops emotion recognition module." 
-    },
-    { 
-      name: "Jayeed Tamboli", 
-      role: "Documentation & Testing Lead", 
-      description: "Manages documentation and testing." 
-    },
+    { name: "Rakesh Telang", role: "Project Lead / NLP Engineer", description: "Leads project development and NLP integration." },
+    { name: "Abhijit Patil", role: "Backend Developer", description: "Handles backend systems and data security." },
+    { name: "Prajakta Patil", role: "Frontend Developer", description: "Designs the UI and 2D avatar interface." },
+    { name: "Navneeth Nair", role: "AI & Emotion Engineer", description: "Develops emotion recognition module." },
+    { name: "Jayeed Tamboli", role: "Documentation & Testing Lead", description: "Manages documentation and testing." }
   ];
 
   const values = [
@@ -45,7 +23,7 @@ const About = () => {
       <section className="py-20 px-6 bg-gradient-hero">
         <div className="container mx-auto text-center max-w-4xl">
           <h1 className="text-5xl md:text-6xl font-heading font-bold mb-8 animate-fade-in">
-            Our Mission is to Revolutionize Mental Wellness with AI 
+            Our Mission
           </h1>
           <p className="text-2xl text-muted-foreground leading-relaxed animate-fade-in">
             We believe AI can enhance human mental well-being, not replace it. 
@@ -65,21 +43,24 @@ const About = () => {
               Passionate minds building the future of mental wellness
             </p>
           </div>
-
-          {/* Flexbox layout centers the final row automatically */}
-          <div className="flex flex-wrap justify-center gap-8">
-            {team.map((member, index) => (
-              <div
-                key={index}
-                className="w-full sm:w-1/2 md:w-1/3 max-w-sm"
-              >
-                <Card className="glass-card p-6 text-center hover-glow h-full">
-                  <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4" />
-                  <h3 className="text-xl font-heading font-semibold mb-2">{member.name}</h3>
-                  <p className="text-primary font-semibold mb-2">{member.role}</p>
-                  <p className="text-muted-foreground text-sm">{member.description}</p>
-                </Card>
-              </div>
+          <div className="flex flex-wrap justify-center gap-8 max-w-6xl mx-auto">
+            {team.slice(0, 3).map((member, index) => (
+              <Card key={index} className="glass-card p-6 text-center hover-glow w-full md:w-[calc(50%-1rem)] lg:w-[calc(33.333%-1.5rem)]">
+                <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4" />
+                <h3 className="text-xl font-heading font-semibold mb-2">{member.name}</h3>
+                <p className="text-primary font-semibold mb-2">{member.role}</p>
+                <p className="text-muted-foreground text-sm">{member.description}</p>
+              </Card>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-center gap-8 max-w-4xl mx-auto mt-8">
+            {team.slice(3).map((member, index) => (
+              <Card key={index + 3} className="glass-card p-6 text-center hover-glow w-full md:w-[calc(50%-1rem)] lg:w-[calc(33.333%-1.5rem)]">
+                <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4" />
+                <h3 className="text-xl font-heading font-semibold mb-2">{member.name}</h3>
+                <p className="text-primary font-semibold mb-2">{member.role}</p>
+                <p className="text-muted-foreground text-sm">{member.description}</p>
+              </Card>
             ))}
           </div>
         </div>
@@ -101,7 +82,7 @@ const About = () => {
                 { year: "JUNE 2026", title: "Launch", description: "Full public release with all ten modules" }
               ].map((milestone, index) => (
                 <div key={index} className="flex gap-8 items-center">
-                  <div className="text-5xl font-heading font-bold gradient-text w-32 text-right">
+                  <div className="text-3xl md:text-4xl font-heading font-bold gradient-text w-40 text-right">
                     {milestone.year}
                   </div>
                   <div className="flex-1 glass-card p-6 rounded-2xl">

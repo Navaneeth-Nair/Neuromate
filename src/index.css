@@ -64,35 +64,6 @@ All colors MUST be HSL.
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  .dark {
-    --background: 232 45% 10%;
-    --foreground: 0 0% 98%;
-
-    --card: 232 40% 15%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 232 40% 15%;
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 258 100% 83%;
-    --primary-foreground: 232 45% 16%;
-
-    --secondary: 232 35% 20%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 232 35% 20%;
-    --muted-foreground: 232 20% 65%;
-
-    --accent: 181 84% 66%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62.8% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 232 30% 25%;
-    --input: 232 30% 25%;
-    --ring: 258 100% 83%;
-  }
 }
 
 @layer base {
@@ -140,4 +111,38 @@ All colors MUST be HSL.
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-20px); }
   }
+  
+  /* Accessibility Styles */
+  .high-contrast {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 100%;
+    --primary: 258 100% 70%;
+    --secondary: 0 0% 20%;
+    --muted: 0 0% 15%;
+    --border: 0 0% 30%;
+  }
+  
+  .high-contrast * {
+    border-color: hsl(var(--border)) !important;
+  }
+  
+  .reader-mode {
+    --background: 40 20% 97%;
+    --foreground: 0 0% 10%;
+  }
+  
+  .reader-mode body {
+    max-width: 800px;
+    margin: 0 auto;
+    line-height: 1.8;
+  }
+  
+  .keyboard-nav *:focus {
+    outline: 3px solid hsl(var(--primary));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
 }
+
