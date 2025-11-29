@@ -1,99 +1,102 @@
-# Welcome to your Lovable project
+# NeuroMate – Official Website
+Your AI Companion for Mental Well-Being
 
-## Project info
+NeuroMate is a modern web application designed to introduce and showcase our AI-based mental wellness assistant. This website gives users an overview of NeuroMate’s features such as mood tracking, journaling, community support, productivity tools, and the Floating AI Mode.
 
-**URL**: https://lovable.dev/projects/97da1721-ba18-4187-8ce6-cebbbd545527
+## Tech Stack
 
-## How can I edit this code?
+This website is built with a modern and fast frontend stack:
+- React + TypeScript – Component-based UI
+- Vite – Fast development and bundling
+- TailwindCSS – Utility-first styling
+- ShadCN UI – Professional UI components
+- React Router – Smooth page navigation
+- Recharts – Charts and analytics visuals
 
-There are several ways of editing your application.
+## Folder Structure
 
-**Use Lovable**
+├─ src  
+│  ├─ components  
+│  │  ├─ activities  
+│  │  ├─ community  
+│  │  ├─ dashboard  
+│  │  ├─ journal  
+│  │  ├─ layout  
+│  │  └─ ui  
+│  ├─ pages  
+│  │  ├─ Home  
+│  │  ├─ Community  
+│  │  ├─ Profile  
+│  │  ├─ Settings  
+│  │  ├─ Dashboard  
+│  │  └─ FloatingAIMode  
+│  ├─ assets  
+│  ├─ hooks  
+│  ├─ lib  
+│  └─ main.tsx  
+└─ index.html  
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/97da1721-ba18-4187-8ce6-cebbbd545527) and start prompting.
+This structure keeps all features organized and easy to expand.
 
-Changes made via Lovable will be committed automatically to this repo.
+## Key Pages
 
-**Use your preferred IDE**
+### Home Page
+Introduction to NeuroMate, its features, benefits, and product highlights.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Community Page
+Displays challenges, motivational posts, wellness activities, and community interactions.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Profile Page
+Shows user details, progress, and activity stats in a personalized layout.
 
-Follow these steps:
+### Settings Page
+Allows users to modify preferences, theme, notifications, and app behavior.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Floating AI Mode
+A special mode where a small floating AI avatar assists users on top of other apps.
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Dashboard
+Shows analytics such as mood trends, activity logs, and progress charts.
 
-# Step 3: Install frontend dependencies.
-npm i
+### Journal
+Allows users to write entries and track emotional wellbeing over time.
 
-# Step 4: Set up MySQL database (see backend/README.md for details)
-# Create database: CREATE DATABASE `neuromate web`;
-# Run migration: mysql -u root -p "neuromate web" < mysql/migrations/001_initial_schema.sql
+## Installation and Setup
 
-# Step 5: Set up backend (see backend/README.md)
-cd backend
+1. Clone the repository
+git clone https://github.com/your-username/neuromate-website.git
+cd neuromate-website
+
+2. Install dependencies
 npm install
-# Create .env file with MySQL credentials
+
+3. Run the development server
 npm run dev
 
-# Step 6: In another terminal, start the frontend development server.
-cd ..
-npm run dev
-```
+4. Build for production
+npm run build
 
-**Important:** Make sure to:
-1. Set up MySQL database (see `mysql/migrations/001_initial_schema.sql`)
-2. Configure backend `.env` file (see `backend/.env.example`)
-3. Configure frontend `.env` file with `VITE_API_URL=http://localhost:3001/api`
-4. Start the backend server before starting the frontend
+## Features
+- Clean and minimal UI
+- Fully responsive design
+- Component-based architecture
+- Fast loading with Vite
+- Beautiful charts and analytics
+- Organized and scalable codebase
+- Modern UI components using ShadCN
 
-**Edit a file directly in GitHub**
+## Screenshots
+(Add your images here)
+screenshots/home.png
+screenshots/dashboard.png
+screenshots/community.png
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Contributors
+- Rakesh – Frontend development, architecture, dashboard, activities system
+- Prajakta – UI design, wireframes, layouts, community page, styling
 
-**Use GitHub Codespaces**
+## License
+This project is licensed under the MIT License.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-**Frontend:**
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-**Backend:**
-- Node.js / Express
-- MySQL
-- JWT Authentication
-
-**Database:**
-- MySQL (database name: "neuromate web")
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/97da1721-ba18-4187-8ce6-cebbbd545527) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Support
+If you like the project, consider giving it a star on GitHub.
