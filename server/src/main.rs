@@ -6,6 +6,8 @@ use tokio::net::{TcpListener, TcpStream};
 use serde_json::json;
 
 mod logging;
+mod mood_engine;
+mod filter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,12 +68,21 @@ async fn handle_client(
     let mut question_bytes = vec![0u8; question_length];
     socket.read_exact(&mut question_bytes).await?;
     let question = String::from_utf8(question_bytes)?;
-    
-    // Query Ollama
-    let answer = query_ollama(ollama_url, &question).await?;
-    
-    // Log question and answer
-    let _ = logging::log_entry(&question, &answer).await;
+
+    let client_id = socket.peer_addr()?.to_string();
+    let mood = mood_engine::record_interaction(&client_id, &question).await;
+
+    // Query Ollama with mood context
+    let raw_answer = query_ollama(ollama_url, &question, &mood).await?;
+
+    // Filter out potentially harmful text
+    let answer = filter::sanitize_response(&raw_answer);
+
+    // Log question/answer plus mood
+    let _ = logging::log_entry(
+        &format!("{} [mood={}]", question, mood),
+        &answer,
+    ).await;
     
     // Send response
     let answer_bytes = answer.as_bytes();
@@ -82,24 +93,26 @@ async fn handle_client(
     Ok(())
 }
 
-async fn query_ollama(ollama_url: &str, question: &str) -> Result<String, Box<dyn std::error::Error>> {
+async fn query_ollama(ollama_url: &str, question: &str, culture: &str) -> Result<String, Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
-    
+
+    let prompt = format!("User mood: {}\nUser: {}\nAssistant:", culture, question);
+
     let payload = json!({
         "model": "qwen2.5:7b",
-        "prompt": question,
+        "prompt": prompt,
         "stream": false
     });
-    
+
     let response = tokio::time::timeout(
         std::time::Duration::from_secs(120),
         client.post(ollama_url)
             .json(&payload)
             .send()
     ).await??;
-    
+
     let result: serde_json::Value = response.json().await?;
-    
+
     Ok(result["response"]
         .as_str()
         .unwrap_or("No response from Ollama")
