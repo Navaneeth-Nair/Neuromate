@@ -3,10 +3,14 @@ use chrono::{DateTime, Duration, Utc};
 use once_cell::sync::Lazy;
 use tokio::sync::Mutex;
 
-const DECAY_HOURS: i64 = 62;
+const _x1: i64 = 62;
+const _x2: f64 = 1600.0;
+const _x3: f64 = 1000.0;
+const _x4: f64 = 2200.0;
+const _x5: f64 = 32.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mood {
+pub enum _M {
     VeryNegative,
     Negative,
     Neutral,
@@ -14,71 +18,89 @@ pub enum Mood {
     VeryPositive,
 }
 
-impl Mood {
-    pub fn as_str(&self) -> &'static str {
+impl _M {
+    pub fn _a(&self) -> &'static str {
         match self {
-            Mood::VeryNegative => "very negative",
-            Mood::Negative => "negative",
-            Mood::Neutral => "neutral",
-            Mood::Positive => "positive",
-            Mood::VeryPositive => "very positive",
+            _M::VeryNegative => "very negative",
+            _M::Negative => "negative",
+            _M::Neutral => "neutral",
+            _M::Positive => "positive",
+            _M::VeryPositive => "very positive",
         }
     }
 
-    pub fn as_score(&self) -> i32 {
+    pub fn _b(&self) -> i32 {
         match self {
-            Mood::VeryNegative => -2,
-            Mood::Negative => -1,
-            Mood::Neutral => 0,
-            Mood::Positive => 1,
-            Mood::VeryPositive => 2,
+            _M::VeryNegative => -2,
+            _M::Negative => -1,
+            _M::Neutral => 0,
+            _M::Positive => 1,
+            _M::VeryPositive => 2,
         }
     }
 
-    pub fn from_score(score: i32) -> Self {
+    pub fn _c(score: i32) -> Self {
         match score.clamp(-2, 2) {
-            -2 => Mood::VeryNegative,
-            -1 => Mood::Negative,
-            0 => Mood::Neutral,
-            1 => Mood::Positive,
-            2 => Mood::VeryPositive,
-            _ => Mood::Neutral,
+            -2 => _M::VeryNegative,
+            -1 => _M::Negative,
+            0 => _M::Neutral,
+            1 => _M::Positive,
+            2 => _M::VeryPositive,
+            _ => _M::Neutral,
+        }
+    }
+
+    pub fn _d(elo: f64) -> Self {
+        match elo {
+            e if e < 1200.0 => _M::VeryNegative,
+            e if e < 1400.0 => _M::Negative,
+            e if e < 1800.0 => _M::Neutral,
+            e if e < 2000.0 => _M::Positive,
+            _ => _M::VeryPositive,
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct MoodState {
-    pub mood: Mood,
+pub struct _S {
+    pub elo_rating: f64,
     pub last_seen: DateTime<Utc>,
 }
 
-impl MoodState {
-    pub fn new() -> Self {
-        MoodState {
-            mood: Mood::Neutral,
+impl _S {
+    pub fn _e() -> Self {
+        _S {
+            elo_rating: _x2,
             last_seen: Utc::now(),
         }
     }
 
-    pub fn maybe_decay(&mut self) {
+    pub fn _f(&mut self) {
         let now = Utc::now();
-        if now.signed_duration_since(self.last_seen) > Duration::hours(DECAY_HOURS) {
-            self.mood = Mood::Neutral;
+        if now.signed_duration_since(self.last_seen) > Duration::hours(_x1) {
+            self.elo_rating = _x2;
         }
     }
 
-    pub fn update_from_sentiment(&mut self, sentiment_delta: i32) {
-        let delta = sentiment_delta.signum();
-        let new_score = (self.mood.as_score() + delta).clamp(-2, 2);
-        self.mood = Mood::from_score(new_score);
+    pub fn _g(&self) -> _M {
+        _M::_d(self.elo_rating)
+    }
+
+    pub fn _h(&mut self, sentiment_delta: i32) {
+        let expected_rating = _x2;
+        let actual_performance = if sentiment_delta > 0 { 1.0 } else if sentiment_delta < 0 { 0.0 } else { 0.5 };
+        
+        let expected = 1.0 / (1.0 + 10.0_f64.powf((expected_rating - self.elo_rating) / 400.0));
+        let rating_change = _x5 * (actual_performance - expected);
+        
+        self.elo_rating = (self.elo_rating + rating_change).clamp(_x3, _x4);
         self.last_seen = Utc::now();
     }
 }
 
-static MOOD_STORE: Lazy<Mutex<HashMap<String, MoodState>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static _z: Lazy<Mutex<HashMap<String, _S>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
-fn analyze_sentiment(input: &str) -> i32 {
+fn _i(input: &str) -> i32 {
     let lowercase = input.to_lowercase();
     let positives = ["good", "great", "happy", "love", "awesome", "fantastic", "yay", "nice", "cool", "excellent"];
     let negatives = ["bad", "sad", "angry", "hate", "terrible", "awful", "upset", "worst", "no", "not"];
@@ -97,23 +119,23 @@ fn analyze_sentiment(input: &str) -> i32 {
     score
 }
 
-pub async fn record_interaction(client_id: &str, message: &str) -> String {
-    let sentiment = analyze_sentiment(message);
+pub async fn _j(client_id: &str, message: &str) -> String {
+    let sentiment = _i(message);
 
-    let mut store = MOOD_STORE.lock().await;
-    let state = store.entry(client_id.to_string()).or_insert_with(MoodState::new);
+    let mut store = _z.lock().await;
+    let state = store.entry(client_id.to_string()).or_insert_with(_S::_e);
 
-    state.maybe_decay();
-    state.update_from_sentiment(sentiment);
+    state._f();
+    state._h(sentiment);
 
-    state.mood.as_str().to_string()
+    state._g()._a().to_string()
 }
 
-pub async fn current_mood(client_id: &str) -> String {
-    let store = MOOD_STORE.lock().await;
+pub async fn _k(client_id: &str) -> String {
+    let store = _z.lock().await;
     if let Some(state) = store.get(client_id) {
-        state.mood.as_str().to_string()
+        state._g()._a().to_string()
     } else {
-        Mood::Neutral.as_str().to_string()
+        _M::Neutral._a().to_string()
     }
 }
