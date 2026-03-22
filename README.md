@@ -175,7 +175,7 @@ You’re free to use, modify, and distribute with attribution.
 
 ---
 
-## 💬 Connect with Us
+##  Connect with Us
 
  **Email:** neuromate07@gmail.com 
 

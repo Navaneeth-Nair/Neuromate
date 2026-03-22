@@ -102,16 +102,32 @@ static _z: Lazy<Mutex<HashMap<String, _S>>> = Lazy::new(|| Mutex::new(HashMap::n
 
 fn _i(input: &str) -> i32 {
     let lowercase = input.to_lowercase();
-    let positives = ["good", "great", "happy", "love", "awesome", "fantastic", "yay", "nice", "cool", "excellent"];
-    let negatives = ["bad", "sad", "angry", "hate", "terrible", "awful", "upset", "worst", "no", "not"];
+    let positives = [
+        "good", "great", "happy", "glad", "joy", "joyful", "love", "lovely", "awesome",
+        "fantastic", "yay", "nice", "cool", "excellent", "wonderful", "amazing", "pleased",
+        "excited", "thrilled", "cheerful", "delighted", "grateful", "blessed", "perfect",
+    ];
+    let negatives = [
+        "bad", "sad", "angry", "hate", "terrible", "awful", "upset", "worst", "hated",
+        "depressed", "miserable", "horrible", "no", "not",
+    ];
     let mut score = 0;
 
     for word in lowercase.split_whitespace() {
-        let token = word.trim_matches(|c: char| !c.is_alphanumeric());
-        if positives.contains(&token) {
+        // Strip punctuation so "happy!" matches; drop apostrophes so "I'm" → im for lookup
+        let token: String = word
+            .trim_matches(|c: char| !c.is_alphanumeric())
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>()
+            .to_lowercase();
+        if token.is_empty() {
+            continue;
+        }
+        if positives.iter().any(|p| *p == token) {
             score += 1;
         }
-        if negatives.contains(&token) {
+        if negatives.iter().any(|n| *n == token) {
             score -= 1;
         }
     }
@@ -119,7 +135,8 @@ fn _i(input: &str) -> i32 {
     score
 }
 
-pub async fn _j(client_id: &str, message: &str) -> String {
+/// Mood label for this message + current ELO after updating from this message.
+pub async fn _j(client_id: &str, message: &str) -> (String, f64) {
     let sentiment = _i(message);
 
     let mut store = _z.lock().await;
@@ -128,7 +145,16 @@ pub async fn _j(client_id: &str, message: &str) -> String {
     state._f();
     state._h(sentiment);
 
-    state._g()._a().to_string()
+    // Use this message's keyword sentiment for the label when it’s clear; ELO alone stays
+    // near “neutral” for a long time (e.g. starting rating 1600 → neutral bucket).
+    let mood = if sentiment != 0 {
+        _M::_c(sentiment.clamp(-2, 2))
+    } else {
+        state._g()
+    };
+    let label = mood._a().to_string();
+    let elo = state.elo_rating;
+    (label, elo)
 }
 
 pub async fn _k(client_id: &str) -> String {

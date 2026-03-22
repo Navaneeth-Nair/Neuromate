@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import socket
 import struct
+import time
 import dotenv
 import os
+from pathlib import Path
 import json
 import sys
 import warnings
@@ -16,9 +18,10 @@ except ImportError:
 try:
     import speech_recognition as sr
 except ImportError:
-    pass
+    sr = None
 
-dotenv.load_dotenv()
+# Repo-root .env (works regardless of current working directory)
+dotenv.load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Initialize Vosk for offline STT
 _vosk_model = None
@@ -27,22 +30,26 @@ def init_vosk():
     """Initialize Vosk model for offline speech recognition."""
     global _vosk_model
     try:
-        if vosk.SetLogLevel(-1) is not None:
-            pass  # Suppress Vosk logging
-        
+        import vosk
+    except ImportError:
+        print("  Vosk not installed (pip install vosk) — offline STT disabled")
+        return False
+    try:
+        vosk.SetLogLevel(-1)
+
         # Check if model exists
         model_path = "model"
         if not os.path.exists(model_path):
-            print("📥 Vosk model not found. Downloading...")
+            print(" Vosk model not found. Downloading...")
             print("   Visit: https://alphacephei.com/vosk/models")
             print("   Download a model and extract to ./model directory")
             return False
         
         _vosk_model = vosk.Model(model_path)
-        print("✅ Offline STT (Vosk) initialized")
+        print(" Offline STT (Vosk) initialized")
         return True
     except Exception as e:
-        print(f"⚠️  Vosk offline STT unavailable: {e}")
+        print(f"  Vosk offline STT unavailable: {e}")
         return False
 
 def get_speech_offline():
@@ -55,7 +62,7 @@ def get_speech_offline():
         rec = vosk.KaldiRecognizer(_vosk_model, 16000)
         rec.SetWords(json.dumps(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]))
         
-        print("🎤 Listening (offline)...")
+        print(" Listening (offline)...")
         partial_result = ""
         
         while True:
@@ -82,7 +89,7 @@ def get_speech_offline():
         return ""
         
     except Exception as e:
-        print(f"❌ Offline STT error: {e}")
+        print(f" Offline STT error: {e}")
         return None
 
 def get_speech_online():
@@ -90,7 +97,7 @@ def get_speech_online():
     try:
         recognizer = sr.Recognizer()
         with sr.Microphone() as source:
-            print("🎤 Listening (online)...")
+            print(" Listening (online)...")
             audio = recognizer.listen(source, timeout=10)
         
         try:
@@ -98,14 +105,14 @@ def get_speech_online():
             print(f"  > {text}")
             return text
         except sr.UnknownValueError:
-            print("❌ Could not understand audio")
+            print(" Could not understand audio")
             return None
         except sr.RequestError as e:
-            print(f"❌ Online STT error: {e}")
+            print(f" Online STT error: {e}")
             return None
             
     except Exception as e:
-        print(f"❌ Online STT error: {e}")
+        print(f" Online STT error: {e}")
         return None
 
 def get_speech_input():
@@ -121,37 +128,95 @@ def get_speech_input():
         import speech_recognition
         return get_speech_online()
     except ImportError:
-        print("❌ speech_recognition not installed for online fallback")
+        print(" speech_recognition not installed for online fallback")
         return None
 
-def send_question(question, host='100.86.220.9', port=11434):
-    """Send question to server and receive answer."""
+
+def _recv_exact(sock, n):
+    """Read exactly n bytes from TCP stream (recv may return partial data)."""
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            return None
+        buf += chunk
+    return buf
+
+
+def send_question(question, host=None, port=None):
+    """Send question to Monika TCP server and receive answer.
+
+    Uses SERVER_HOST and SERVER_PORT from the environment when not passed
+    (defaults: 127.0.0.1:12345 — the Rust server port, not Ollama's 11434).
+    
+    The server streams the response as multiple length-prefixed frames:
+      [4-byte length] [data]
+      [4-byte length] [data]
+      ...
+      [4 bytes: 0]  ← EOF marker (empty frame)
+    
+    This function reads ALL frames until EOF and concatenates them.
+    """
+    if host is None:
+        host = os.getenv("SERVER_HOST", "127.0.0.1")
+    if port is None:
+        port = int(os.getenv("SERVER_PORT", "12345"))
+
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
+        # Slightly above server OLLAMA_HTTP_TIMEOUT_SECS so the server can finish first
+        client_socket.settimeout(float(os.getenv("CLIENT_SOCKET_TIMEOUT_SECS", "310")))
         client_socket.connect((host, port))
-        
-        # Send question length and data
-        question_bytes = question.encode('utf-8')
-        client_socket.sendall(struct.pack('I', len(question_bytes)))
+
+        # Send question length and data (little-endian u32, matches server)
+        question_bytes = question.encode("utf-8")
+        client_socket.sendall(struct.pack("<I", len(question_bytes)))
         client_socket.sendall(question_bytes)
+
+        # ── Read all streamed frames until EOF ────────────────────────────────
+        # Server sends: [length][data] [length][data] ... [0]
+        # We concatenate all data frames until we get a frame with length=0
+        answer_parts = []
         
-        # Receive answer length
-        length_data = client_socket.recv(4)
-        if not length_data:
-            return None
-        length = struct.unpack('I', length_data)[0]
-        
-        # Receive answer
-        answer_bytes = b''
-        while len(answer_bytes) < length:
-            chunk = client_socket.recv(min(4096, length - len(answer_bytes)))
-            if not chunk:
+        while True:
+            # Read 4-byte length prefix
+            length_data = _recv_exact(client_socket, 4)
+            if length_data is None:
+                print(
+                    "Error: connection closed before response length "
+                    f"(is the server running on {host}:{port}?)"
+                )
+                return None
+            
+            (length,) = struct.unpack("<I", length_data)
+            
+            # Empty frame (length=0) signals EOF
+            if length == 0:
                 break
-            answer_bytes += chunk
+            
+            # Sanity check
+            if length > 32 * 1024 * 1024:
+                print(f"Error: invalid frame length ({length})")
+                return None
+
+            # Read exactly `length` bytes
+            frame_data = _recv_exact(client_socket, length)
+            if frame_data is None or len(frame_data) < length:
+                print("Error: connection closed before full frame body")
+                return None
+            
+            answer_parts.append(frame_data.decode("utf-8"))
+
+        return "".join(answer_parts)
         
-        answer = answer_bytes.decode('utf-8')
-        return answer
-        
+    except socket.timeout:
+        print(
+            "Error: timed out waiting for the server (Ollama may be slow or unreachable)."
+        )
+        return None
+    except OSError as e:
+        print(f"Error: {e}")
+        return None
     except Exception as e:
         print(f"Error: {e}")
         return None
@@ -163,6 +228,12 @@ def main():
     print("=" * 50)
     print("Monika Client - Speech & Text Interface")
     print("=" * 50)
+    _h = os.getenv("SERVER_HOST", "127.0.0.1")
+    _p = int(os.getenv("SERVER_PORT", "12345"))
+    print(f"TCP server (Monika): {_h}:{_p}  —  start `monika-server` here before chatting.")
+    print(
+        "Replies are limited to about one paragraph (server prompt + token cap)."
+    )
     
     # Try to initialize offline STT
     offline_available = init_vosk()
@@ -200,26 +271,28 @@ def main():
                 print("  'help'    - Show this help\n")
                 continue
             elif user_input.lower() == 'voice':
-                if offline_available or sr:
+                if offline_available or sr is not None:
                     input_mode = "voice"
-                    print("✅ Switched to voice input")
+                    print(" Switched to voice input")
                 else:
-                    print("❌ Voice not available (install vosk or speech_recognition)")
+                    print(" Voice not available (install vosk or speech_recognition)")
                 continue
             elif user_input.lower() == 'text':
                 input_mode = "text"
-                print("✅ Switched to text input")
+                print(" Switched to text input")
                 continue
             
             if not user_input:
                 continue
             
-            print("Waiting for response...")
+            print("Waiting for response…")
+            t0 = time.perf_counter()
             answer = send_question(user_input)
-            if answer:
-                print(f"Assistant: {answer}\n")
+            elapsed = time.perf_counter() - t0
+            if answer is not None:
+                print(f"Assistant ({elapsed:.2f}s): {answer}\n")
             else:
-                print("Failed to get response\n")
+                print(f"Failed to get response after {elapsed:.2f}s\n")
                 
         except KeyboardInterrupt:
             print("\nGoodbye!")
