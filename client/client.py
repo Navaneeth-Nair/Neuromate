@@ -144,7 +144,7 @@ def _recv_exact(sock, n):
 
 
 def send_question(question, host=None, port=None):
-    """Send question to Monika TCP server and receive answer.
+    """Send question to Monika TCP server and stream response.
 
     Uses SERVER_HOST and SERVER_PORT from the environment when not passed
     (defaults: 127.0.0.1:12345 — the Rust server port, not Ollama's 11434).
@@ -155,7 +155,9 @@ def send_question(question, host=None, port=None):
       ...
       [4 bytes: 0]  ← EOF marker (empty frame)
     
-    This function reads ALL frames until EOF and concatenates them.
+    This function:
+    - Collects full response for TTS processing
+    - Displays words one-by-one for visual streaming effect
     """
     if host is None:
         host = os.getenv("SERVER_HOST", "127.0.0.1")
@@ -173,17 +175,18 @@ def send_question(question, host=None, port=None):
         client_socket.sendall(struct.pack("<I", len(question_bytes)))
         client_socket.sendall(question_bytes)
 
-        # ── Read all streamed frames until EOF ────────────────────────────────
-        # Server sends: [length][data] [length][data] ... [0]
-        # We concatenate all data frames until we get a frame with length=0
-        answer_parts = []
+        # ── Stream and collect response ──────────────────────────────────────
+        # Keep full chunks for TTS, display word-by-word
+        print("Assistant: ", end="", flush=True)
+        full_response = ""  # For TTS
+        buffer = ""  # For word-by-word display
         
         while True:
             # Read 4-byte length prefix
             length_data = _recv_exact(client_socket, 4)
             if length_data is None:
                 print(
-                    "Error: connection closed before response length "
+                    "\nError: connection closed before response length "
                     f"(is the server running on {host}:{port}?)"
                 )
                 return None
@@ -192,33 +195,55 @@ def send_question(question, host=None, port=None):
             
             # Empty frame (length=0) signals EOF
             if length == 0:
+                # Print any remaining buffered content
+                if buffer:
+                    print(buffer, end="", flush=True)
                 break
             
             # Sanity check
             if length > 32 * 1024 * 1024:
-                print(f"Error: invalid frame length ({length})")
+                print(f"\nError: invalid frame length ({length})")
                 return None
 
             # Read exactly `length` bytes
             frame_data = _recv_exact(client_socket, length)
             if frame_data is None or len(frame_data) < length:
-                print("Error: connection closed before full frame body")
+                print("\nError: connection closed before full frame body")
                 return None
             
-            answer_parts.append(frame_data.decode("utf-8"))
+            # Decode the chunk
+            chunk = frame_data.decode("utf-8")
+            
+            # Keep full chunk for TTS processing
+            full_response += chunk
+            
+            # Add to display buffer
+            buffer += chunk
+            
+            # Split by spaces and display word-by-word
+            # Keep the last partial word in buffer in case it's incomplete
+            parts = buffer.split(" ")
+            
+            # Print all complete words (all but the last part)
+            for word in parts[:-1]:
+                print(word + " ", end="", flush=True)
+            
+            # Keep the last part in buffer (might be incomplete word)
+            buffer = parts[-1]
 
-        return "".join(answer_parts)
+        print()  # Newline after streaming completes
+        return full_response
         
     except socket.timeout:
         print(
-            "Error: timed out waiting for the server (Ollama may be slow or unreachable)."
+            "\nError: timed out waiting for the server (Ollama may be slow or unreachable)."
         )
         return None
     except OSError as e:
-        print(f"Error: {e}")
+        print(f"\nError: {e}")
         return None
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\nError: {e}")
         return None
     finally:
         client_socket.close()
@@ -290,7 +315,8 @@ def main():
             answer = send_question(user_input)
             elapsed = time.perf_counter() - t0
             if answer is not None:
-                print(f"Assistant ({elapsed:.2f}s): {answer}\n")
+                print(f"\n({elapsed:.2f}s)\n")
+                # answer is the full response that can be passed to TTS
             else:
                 print(f"Failed to get response after {elapsed:.2f}s\n")
                 

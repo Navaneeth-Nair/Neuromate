@@ -69,7 +69,7 @@ async fn main() -> Result<(), DynError> {
     load_dotenv();
 
     let ollama_url = ollama_http::resolve_ollama_generate_url();
-    let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "12345".to_string());
     let bind_addr = format!("{}:{}", server_host, server_port);
 
@@ -178,7 +178,7 @@ async fn handle_client(mut socket: TcpStream, ollama_url: &str, client_id: &str)
 fn fmt_timing_rows(rows: &[(&str, f64)]) -> String {
     let mut out = String::new();
     for (k, v) in rows {
-        out.push_str(&format!(" {:<26} {:>10.2}\n", k, v));
+        out.push_str(&format!("  {:<26} {:>10.2}\n", k, v));
     }
     out
 }
@@ -239,7 +239,7 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
             ("send_eof", send_eof_ms),
         ]),
         format!(
-            " (Ollama API) prompt_tokens: {:>10}\n (Ollama API) output_tokens: {:>10}\n (Ollama API) reported_wall_s: {:>10.3}\n",
+            "  (Ollama API) prompt_tokens:     {:>10}\n  (Ollama API) output_tokens:    {:>10}\n  (Ollama API) reported_wall_s:  {:>10.3}\n",
             om.prompt_tokens,
             om.output_tokens,
             om.ollama_reported_wall_ns as f64 / 1e9
@@ -272,7 +272,7 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
                 ("total_server_wall_ms", total_wall_ms),
             ]),
             format!(
-                " (Ollama API) prompt_tokens: {:>10}\n (Ollama API) output_tokens: {:>10}\n (Ollama API) reported_wall_s: {:>10.3}\n",
+                "  (Ollama API) prompt_tokens:     {:>10}\n  (Ollama API) output_tokens:    {:>10}\n  (Ollama API) reported_wall_s:  {:>10.3}\n",
                 om.prompt_tokens,
                 om.output_tokens,
                 om.ollama_reported_wall_ns as f64 / 1e9
@@ -296,12 +296,8 @@ struct OllamaMeta {
 /// Key points:
 /// - Sets "stream": true in payload to get NDJSON response
 /// - Uses reqwest's bytes_stream() to get a Tokio-compatible async byte stream
-/// - Wraps it in tokio_util::io::StreamReader to get AsyncBufRead (for .lines())
-/// - Each line is a JSON object; extracts "response" field and sends to client
-/// - Accumulates full text and metadata until "done": true
-///
-/// This is true streaming: Ollama sends each token as soon as it's generated,
-/// and we forward each chunk to the client immediately without buffering.
+/// - Each chunk from Ollama is sent as-is to the client
+/// - The client handles word-by-word display with proper spacing
 ///
 /// The persistent HTTP client keeps the connection pool warm, reducing
 /// handshake latency on subsequent requests.
@@ -351,9 +347,6 @@ async fn query_ollama_streaming(
     }
 
     // ── POST using the persistent pooled client ───────────────────────────────
-    // ollama_http::client() is a Lazy<reqwest::Client> with keep-alive, TCP
-    // nodelay, and a 16-connection idle pool — reused across every request so
-    // the TCP handshake and TLS (if any) only happen once.
     let t_post = Instant::now();
     let response = ollama_http::client()
         .post(ollama_url)
@@ -364,16 +357,13 @@ async fn query_ollama_streaming(
     let post_send_ms = t_post.elapsed().as_secs_f64() * 1000.0;
 
     // ── Wrap byte-stream in an AsyncBufRead for line iteration ───────────────
-    // bytes_stream() gives us a Stream of Result<Bytes>
-    // StreamReader converts it to AsyncRead
-    // .lines() from AsyncBufReadExt gives us line-by-line iteration
     let byte_stream = response
         .bytes_stream()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(byte_stream);
     let mut lines = stream_reader.lines();
 
-    // ── Drain NDJSON stream, forwarding each chunk to the client ─────────────
+    // ── Drain NDJSON stream, forwarding chunks to the client ──────────────────
     let t_drain = Instant::now();
     let mut full_text = String::new();
     let mut prompt_tokens: u64 = 0;
@@ -399,11 +389,12 @@ async fn query_ollama_streaming(
         chunk_count += 1;
         let is_done = chunk["done"].as_bool().unwrap_or(false);
 
-        // Extract the generated token(s) and send immediately to client
+        // Extract the generated fragment and send as-is
         let fragment = chunk["response"].as_str().unwrap_or("").to_string();
         if !fragment.is_empty() {
             eprintln!("[monika] chunk #{}: got '{}' (done={})", chunk_count, fragment, is_done);
             full_text.push_str(&fragment);
+            // Send fragment as-is to client (preserving spaces)
             send_framed_message(socket, fragment.as_bytes()).await?;
         } else {
             eprintln!("[monika] chunk #{}: empty response (done={})", chunk_count, is_done);
@@ -414,7 +405,10 @@ async fn query_ollama_streaming(
             prompt_tokens = chunk["prompt_eval_count"].as_u64().unwrap_or(0);
             output_tokens = chunk["eval_count"].as_u64().unwrap_or(0);
             ollama_reported_wall_ns = chunk["total_duration"].as_u64().unwrap_or(0);
-            eprintln!("[monika] stream done after {} chunks. tokens: prompt={}, output={}", chunk_count, prompt_tokens, output_tokens);
+            eprintln!(
+                "[monika] stream done after {} chunks. tokens: prompt={}, output={}",
+                chunk_count, prompt_tokens, output_tokens
+            );
             break;
         }
     }
