@@ -283,7 +283,7 @@ def main():
                 continue
             elif user_input.lower() == 'text':
                 input_mode = "text"
-                print("⌨ Switched to text input")
+                print("Switched to text input")
                 continue
             elif user_input.lower() == 'tts on':
                 if tts:
@@ -331,4 +331,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
