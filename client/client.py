@@ -1,103 +1,126 @@
 #!/usr/bin/env python3
+"""
+Monika Client - Python 3.13 Compatible
+Speech & Text Interface with integrated pyttsx3 TTS
+"""
+
 import socket
 import struct
 import time
 import dotenv
 import os
 from pathlib import Path
-import json
 import sys
 import warnings
+import threading
+import queue
 
-try:
-    import pyaudio
-    import vosk
-except ImportError:
-    pass
+warnings.filterwarnings("ignore")
 
 try:
     import speech_recognition as sr
 except ImportError:
     sr = None
 
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
+
 # Repo-root .env (works regardless of current working directory)
 dotenv.load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-# Initialize Vosk for offline STT
-_vosk_model = None
-
-def init_vosk():
-    """Initialize Vosk model for offline speech recognition."""
-    global _vosk_model
-    try:
-        import vosk
-    except ImportError:
-        print("  Vosk not installed (pip install vosk) — offline STT disabled")
-        return False
-    try:
-        vosk.SetLogLevel(-1)
-
-        # Check if model exists
-        model_path = "model"
-        if not os.path.exists(model_path):
-            print(" Vosk model not found. Downloading...")
-            print("   Visit: https://alphacephei.com/vosk/models")
-            print("   Download a model and extract to ./model directory")
-            return False
+# ==============================================================================
+# Pyttsx3 Threaded Pipeline
+# ==============================================================================
+class SimpleTTSPipeline:
+    """A threaded TTS pipeline to prevent audio from blocking the main chat interface."""
+    def __init__(self, auto_play=True):
+        self.q = queue.Queue()
+        self.auto_play = auto_play
+        self.running = True
+        self.task_counter = 0
         
-        _vosk_model = vosk.Model(model_path)
-        print(" Offline STT (Vosk) initialized")
-        return True
+        # Start background worker thread
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
+
+    def _worker(self):
+        """Worker thread that initializes and runs the pyttsx3 engine."""
+        # pyttsx3 must be initialized in the thread where it will run
+        try:
+            engine = pyttsx3.init()
+            # Optional: Adjust speech rate or voice here
+            # engine.setProperty('rate', 160) 
+        except Exception as e:
+            print(f"\n[TTS Engine Error] Failed to initialize pyttsx3: {e}")
+            return
+
+        while self.running:
+            try:
+                text = self.q.get(timeout=0.5)
+                if text is None:  # Shutdown signal
+                    break
+                
+                engine.say(text)
+                engine.runAndWait()
+                self.q.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"\n[TTS Worker Error] {e}")
+
+    def speak(self, text):
+        """Queue the full text chunk to be spoken."""
+        if not self.auto_play or not text.strip():
+            return -1
+        
+        self.task_counter += 1
+        self.q.put(text)
+        return self.task_counter
+
+    def shutdown(self):
+        """Cleanly shut down the TTS worker thread."""
+        self.running = False
+        self.q.put(None)
+        self.thread.join(timeout=2)
+
+# ==============================================================================
+# Client Logic
+# ==============================================================================
+
+_tts_pipeline = None
+
+def init_tts(enable_tts: bool = True, auto_play: bool = True):
+    """Initialize TTS Pipeline."""
+    global _tts_pipeline
+    
+    if not enable_tts:
+        print("ℹ  TTS disabled")
+        return None
+    
+    if pyttsx3 is None:
+        print(" TTS not available (install pyttsx3 for TTS support)")
+        return None
+
+    try:
+        _tts_pipeline = SimpleTTSPipeline(auto_play=auto_play)
+        print(" TTS Pipeline initialized")
+        return _tts_pipeline
     except Exception as e:
-        print(f"  Vosk offline STT unavailable: {e}")
-        return False
-
-def get_speech_offline():
-    """Capture speech using Vosk offline engine."""
-    try:
-        p = pyaudio.PyAudio()
-        stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=4096)
-        stream.start_stream()
-        
-        rec = vosk.KaldiRecognizer(_vosk_model, 16000)
-        rec.SetWords(json.dumps(["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]))
-        
-        print(" Listening (offline)...")
-        partial_result = ""
-        
-        while True:
-            data = stream.read(4096, exception_on_overflow=False)
-            if len(data) == 0:
-                break
-            
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                if 'result' in result:
-                    text = ' '.join([r['conf'] if 'conf' in r else r['result'] for r in result.get('result', []) if r.get('conf', 1.0) > 0.5])
-                    stream.stop_stream()
-                    stream.close()
-                    p.terminate()
-                    return text if text else result.get('result', [''])[0] if result.get('result') else ""
-            else:
-                partial = json.loads(rec.PartialResult())
-                if 'partial' in partial:
-                    print(f"  > {partial['partial']}")
-        
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
-        return ""
-        
-    except Exception as e:
-        print(f" Offline STT error: {e}")
+        print(f" TTS initialization failed: {e}")
         return None
 
 def get_speech_online():
-    """Fallback to online speech recognition."""
+    """Get speech using online speech recognition."""
     try:
+        if sr is None:
+            print(" speech_recognition not installed")
+            return None
+            
         recognizer = sr.Recognizer()
         with sr.Microphone() as source:
-            print(" Listening (online)...")
+            print(" Listening...")
             audio = recognizer.listen(source, timeout=10)
         
         try:
@@ -108,27 +131,11 @@ def get_speech_online():
             print(" Could not understand audio")
             return None
         except sr.RequestError as e:
-            print(f" Online STT error: {e}")
+            print(f" Speech recognition error: {e}")
             return None
             
     except Exception as e:
-        print(f" Online STT error: {e}")
-        return None
-
-def get_speech_input():
-    """Get speech input, trying offline first, then online fallback."""
-    if _vosk_model:
-        text = get_speech_offline()
-        if text:
-            return text
-        print("Falling back to online STT...")
-    
-    # Fallback to online
-    try:
-        import speech_recognition
-        return get_speech_online()
-    except ImportError:
-        print(" speech_recognition not installed for online fallback")
+        print(f" Error: {e}")
         return None
 
 
@@ -144,21 +151,7 @@ def _recv_exact(sock, n):
 
 
 def send_question(question, host=None, port=None):
-    """Send question to Monika TCP server and stream response.
-
-    Uses SERVER_HOST and SERVER_PORT from the environment when not passed
-    (defaults: 127.0.0.1:12345 — the Rust server port, not Ollama's 11434).
-    
-    The server streams the response as multiple length-prefixed frames:
-      [4-byte length] [data]
-      [4-byte length] [data]
-      ...
-      [4 bytes: 0]  ← EOF marker (empty frame)
-    
-    This function:
-    - Collects full response for TTS processing
-    - Displays words one-by-one for visual streaming effect
-    """
+    """Send question to Monika TCP server and stream response."""
     if host is None:
         host = os.getenv("SERVER_HOST", "127.0.0.1")
     if port is None:
@@ -166,78 +159,55 @@ def send_question(question, host=None, port=None):
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        # Slightly above server OLLAMA_HTTP_TIMEOUT_SECS so the server can finish first
         client_socket.settimeout(float(os.getenv("CLIENT_SOCKET_TIMEOUT_SECS", "310")))
         client_socket.connect((host, port))
 
-        # Send question length and data (little-endian u32, matches server)
         question_bytes = question.encode("utf-8")
         client_socket.sendall(struct.pack("<I", len(question_bytes)))
         client_socket.sendall(question_bytes)
 
-        # ── Stream and collect response ──────────────────────────────────────
-        # Keep full chunks for TTS, display word-by-word
         print("Assistant: ", end="", flush=True)
-        full_response = ""  # For TTS
-        buffer = ""  # For word-by-word display
+        full_response = ""
+        buffer = ""
         
         while True:
-            # Read 4-byte length prefix
             length_data = _recv_exact(client_socket, 4)
             if length_data is None:
-                print(
-                    "\nError: connection closed before response length "
-                    f"(is the server running on {host}:{port}?)"
-                )
+                print(f"\nError: connection closed before response length (is server running on {host}:{port}?)")
                 return None
             
             (length,) = struct.unpack("<I", length_data)
             
-            # Empty frame (length=0) signals EOF
             if length == 0:
-                # Print any remaining buffered content
                 if buffer:
                     print(buffer, end="", flush=True)
                 break
             
-            # Sanity check
             if length > 32 * 1024 * 1024:
                 print(f"\nError: invalid frame length ({length})")
                 return None
 
-            # Read exactly `length` bytes
             frame_data = _recv_exact(client_socket, length)
             if frame_data is None or len(frame_data) < length:
                 print("\nError: connection closed before full frame body")
                 return None
             
-            # Decode the chunk
             chunk = frame_data.decode("utf-8")
-            
-            # Keep full chunk for TTS processing
             full_response += chunk
-            
-            # Add to display buffer
             buffer += chunk
             
-            # Split by spaces and display word-by-word
-            # Keep the last partial word in buffer in case it's incomplete
             parts = buffer.split(" ")
             
-            # Print all complete words (all but the last part)
             for word in parts[:-1]:
                 print(word + " ", end="", flush=True)
             
-            # Keep the last part in buffer (might be incomplete word)
             buffer = parts[-1]
 
-        print()  # Newline after streaming completes
+        print() 
         return full_response
         
     except socket.timeout:
-        print(
-            "\nError: timed out waiting for the server (Ollama may be slow or unreachable)."
-        )
+        print("\nError: timed out waiting for the server (Ollama may be slow or unreachable).")
         return None
     except OSError as e:
         print(f"\nError: {e}")
@@ -251,60 +221,80 @@ def send_question(question, host=None, port=None):
 def main():
     """Main client loop."""
     print("=" * 50)
-    print("Monika Client - Speech & Text Interface")
+    print("Monika Client - Text & TTS Interface")
     print("=" * 50)
     _h = os.getenv("SERVER_HOST", "127.0.0.1")
     _p = int(os.getenv("SERVER_PORT", "12345"))
-    print(f"TCP server (Monika): {_h}:{_p}  —  start `monika-server` here before chatting.")
-    print(
-        "Replies are limited to about one paragraph (server prompt + token cap)."
-    )
+    print(f"TCP server (Monika): {_h}:{_p}")
+    print("Replies are limited to about one paragraph (server prompt + token cap).")
     
-    # Try to initialize offline STT
-    offline_available = init_vosk()
+    enable_tts = os.getenv("ENABLE_TTS", "1").lower() in ("1", "true", "yes")
+    enable_voice = sr is not None and os.getenv("ENABLE_VOICE", "1").lower() in ("1", "true", "yes")
+    
+    tts = None
+    if enable_tts:
+        tts = init_tts(enable_tts=True, auto_play=True)
     
     print("\nCommands:")
     print("  'quit'    - Exit")
-    print("  'voice'   - Use voice input (STT)")
+    if enable_voice:
+        print("  'voice'   - Use voice input")
     print("  'text'    - Use text input")
+    if tts:
+        print("  'tts on'  - Enable text-to-speech")
+        print("  'tts off' - Disable text-to-speech")
     print("  'help'    - Show this help\n")
     
     input_mode = "text"
+    tts_enabled = enable_tts and tts is not None
     
     while True:
         try:
-            # Determine input based on mode
             if input_mode == "text":
                 user_input = input("You: ").strip()
             else:
-                user_input = get_speech_input()
+                user_input = get_speech_online()
                 if user_input is None:
                     print("Failed to capture speech. Switching to text mode.")
                     input_mode = "text"
                     continue
                 print(f"You: {user_input}")
             
-            # Handle commands
             if user_input.lower() == 'quit':
                 print("Goodbye!")
                 break
             elif user_input.lower() == 'help':
                 print("\nCommands:")
                 print("  'quit'    - Exit")
-                print("  'voice'   - Use voice input")
+                if enable_voice:
+                    print("  'voice'   - Use voice input")
                 print("  'text'    - Use text input")
+                if tts:
+                    print("  'tts on'  - Enable text-to-speech")
+                    print("  'tts off' - Disable text-to-speech")
                 print("  'help'    - Show this help\n")
                 continue
             elif user_input.lower() == 'voice':
-                if offline_available or sr is not None:
+                if enable_voice:
                     input_mode = "voice"
                     print(" Switched to voice input")
                 else:
-                    print(" Voice not available (install vosk or speech_recognition)")
+                    print(" Voice not available (install SpeechRecognition)")
                 continue
             elif user_input.lower() == 'text':
                 input_mode = "text"
-                print(" Switched to text input")
+                print("⌨ Switched to text input")
+                continue
+            elif user_input.lower() == 'tts on':
+                if tts:
+                    tts_enabled = True
+                    print(" Text-to-speech enabled")
+                else:
+                    print(" TTS not available")
+                continue
+            elif user_input.lower() == 'tts off':
+                tts_enabled = False
+                print(" Text-to-speech disabled")
                 continue
             
             if not user_input:
@@ -314,9 +304,16 @@ def main():
             t0 = time.perf_counter()
             answer = send_question(user_input)
             elapsed = time.perf_counter() - t0
+            
             if answer is not None:
                 print(f"\n({elapsed:.2f}s)\n")
-                # answer is the full response that can be passed to TTS
+                
+                if tts_enabled and tts:
+                    try:
+                        task_id = tts.speak(answer)
+                        print(f" Speech queued (task {task_id})")
+                    except Exception as e:
+                        print(f" TTS error: {e}")
             else:
                 print(f"Failed to get response after {elapsed:.2f}s\n")
                 
@@ -325,6 +322,13 @@ def main():
             break
         except Exception as e:
             print(f"Error: {e}\n")
+    
+    if tts:
+        try:
+            tts.shutdown()
+        except:
+            pass
 
 if __name__ == "__main__":
     main()
+    
