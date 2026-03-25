@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Monika Client - Python 3.13 Compatible
-Speech & Text Interface with integrated pyttsx3 TTS
-"""
-
 import socket
 import struct
 import time
@@ -14,8 +9,24 @@ import sys
 import warnings
 import threading
 import queue
+import winsound
+import tempfile
+import logging
+import io
 
+# Suppress noisy loggers before any imports that trigger them
 warnings.filterwarnings("ignore")
+for _logger_name in ("comtypes", "comtypes.client._code_cache", "fairseq",
+                      "fairseq.tasks", "torch", "numba"):
+    logging.getLogger(_logger_name).setLevel(logging.ERROR)
+
+# Import rvc_convert from local src/rvc-tts-pipe (uses fairseq, not faiss)
+_rvc_pipe_dir = str(Path(__file__).resolve().parent.parent / "src" / "rvc-tts-pipe")
+_rvc_dir = str(Path(__file__).resolve().parent.parent / "src" / "rvc")
+for _d in (_rvc_pipe_dir, _rvc_dir):
+    if _d not in sys.path:
+        sys.path.insert(0, _d)
+from rvc_infer import rvc_convert, rvc_init
 
 try:
     import speech_recognition as sr
@@ -50,11 +61,38 @@ class SimpleTTSPipeline:
         # pyttsx3 must be initialized in the thread where it will run
         try:
             engine = pyttsx3.init()
-            # Optional: Adjust speech rate or voice here
-            # engine.setProperty('rate', 160) 
+            # Use a female voice for cleaner RVC input
+            voices = engine.getProperty('voices')
+            for v in voices:
+                if 'female' in v.name.lower() or 'zira' in v.name.lower():
+                    engine.setProperty('voice', v.id)
+                    break
+            else:
+                # Fallback: second voice is usually female on Windows
+                if len(voices) >= 2:
+                    engine.setProperty('voice', voices[1].id)
         except Exception as e:
             print(f"\n[TTS Engine Error] Failed to initialize pyttsx3: {e}")
             return
+
+        # Resolve paths relative to this script's directory (where teto.pth lives)
+        client_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(client_dir, "teto.pth")
+
+        # Pre-load RVC models once so first inference is fast
+        try:
+            prev_cwd = os.getcwd()
+            os.chdir(client_dir)
+            _real_stdout, _real_stderr = sys.stdout, sys.stderr
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+            try:
+                rvc_init(model_path)
+            finally:
+                sys.stdout, sys.stderr = _real_stdout, _real_stderr
+                os.chdir(prev_cwd)
+        except Exception as e:
+            print(f"[RVC] Model pre-load failed: {e}")
 
         while self.running:
             try:
@@ -62,8 +100,40 @@ class SimpleTTSPipeline:
                 if text is None:  # Shutdown signal
                     break
                 
-                engine.say(text)
+                # 1. Save pyttsx3 output to a temporary WAV file
+                tmp_wav = os.path.join(client_dir, "_tts_temp.wav")
+                engine.save_to_file(text, tmp_wav)
                 engine.runAndWait()
+
+                # 2. Run RVC voice conversion with teto.pth
+                try:
+                    # rvc_convert relies on os.getcwd() for hubert_base.pt,
+                    # rmvpe.pt and output dir – ensure we're in client_dir.
+                    prev_cwd = os.getcwd()
+                    os.chdir(client_dir)
+                    # Suppress all RVC internal prints so they don't
+                    # pollute the chat interface.
+                    _real_stdout, _real_stderr = sys.stdout, sys.stderr
+                    sys.stdout = io.StringIO()
+                    sys.stderr = io.StringIO()
+                    try:
+                        output_path = rvc_convert(
+                            model_path=model_path,
+                            input_path=tmp_wav,
+                        )
+                    finally:
+                        sys.stdout, sys.stderr = _real_stdout, _real_stderr
+                        os.chdir(prev_cwd)
+
+                    # 3. Play the converted WAV
+                    winsound.PlaySound(output_path, winsound.SND_FILENAME)
+                except Exception as rvc_err:
+                    print(f"\n[RVC Error] {rvc_err}")
+                finally:
+                    # Clean up the temp pyttsx3 wav
+                    if os.path.exists(tmp_wav):
+                        os.remove(tmp_wav)
+
                 self.q.task_done()
             except queue.Empty:
                 continue
@@ -217,6 +287,8 @@ def send_question(question, host=None, port=None):
         return None
     finally:
         client_socket.close()
+
+
 
 def main():
     """Main client loop."""
