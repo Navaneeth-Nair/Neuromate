@@ -128,36 +128,6 @@ cd Neuromate
 
 ---
 
-### 2. Configure Environment
-
-Create a `.env` file in the repo root:
-
-```env
-# Ollama
-OLLAMA_URL=http://127.0.0.1:11434/api/generate
-OLLAMA_MODEL=qwen2.5:7b
-OLLAMA_NUM_PREDICT=280
-OLLAMA_WARMUP=1
-OLLAMA_HEARTBEAT_SECS=60
-
-# Server
-SERVER_HOST=127.0.0.1
-SERVER_PORT=12345
-
-# Client Bridge (Unity side)
-UNITY_BRIDGE_HOST=127.0.0.1
-UNITY_BRIDGE_PORT=12346
-CLIENT_SOCKET_TIMEOUT_SECS=310
-ENABLE_TTS=1
-
-# Middleware Encryption
-MONIKA_SHARED_SECRET=your-strong-shared-secret
-MONIKA_NONCE_SIZE=12
-MONIKA_CIPHER_TYPE=aes256gcm
-```
-
----
-
 ### 3. Pull the Ollama Model
 
 ```bash
@@ -204,61 +174,6 @@ From your Unity C# scripts, open a TCP connection to `127.0.0.1:12346`.
 
 ---
 
-## Environment Variable Reference
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_URL` | `http://100.86.220.9:11434/api/generate` | Ollama generate endpoint |
-| `OLLAMA_USE_LOCAL` | `0` | Set `1` to force local Ollama base URL |
-| `OLLAMA_LOCAL_BASE` | `http://100.86.220.9:11434` | Used when `OLLAMA_USE_LOCAL=1` |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Model name to load in Ollama |
-| `OLLAMA_NUM_PREDICT` | `280` | Max tokens to generate per response |
-| `OLLAMA_NUM_CTX` | *(not set)* | Context window size override |
-| `OLLAMA_WARMUP` | `0` | Set `1` to prime model on server start |
-| `OLLAMA_HEARTBEAT_SECS` | `60` | Interval (s) for keep-alive pings |
-| `OLLAMA_HTTP_TIMEOUT_SECS` | `300` | HTTP timeout for Ollama requests |
-| `SERVER_HOST` | `127.0.0.1` | Rust server bind address |
-| `SERVER_PORT` | `12345` | Rust server port |
-| `UNITY_BRIDGE_HOST` | `127.0.0.1` | Python bridge bind address |
-| `UNITY_BRIDGE_PORT` | `12346` | Python bridge port |
-| `CLIENT_SOCKET_TIMEOUT_SECS` | `310` | Timeout for bridge→server socket |
-| `ENABLE_TTS` | `1` | Enable TTS+RVC pipeline (`0` to disable) |
-| `MONIKA_SHARED_SECRET` | `monika-e2e-shared-secret-v1-default` | AES-256 encryption key source |
-| `MONIKA_NONCE_SIZE` | `12` | GCM nonce size in bytes |
-| `MONIKA_CIPHER_TYPE` | `aes256gcm` | Cipher algorithm |
-
----
-
-## Project Structure
-
-```
-Neuromate/
-├── .env                    # Local config (not committed)
-├── README.md
-│
-├── server/                 # Rust AI server (monika-server)
-│   ├── Cargo.toml
-│   └── src/
-│       ├── main.rs         # TCP server, request handler, streaming orchestration
-│       ├── mood_engine.rs  # ELO mood tracking + sentiment analysis
-│       ├── ollama_http.rs  # Ollama HTTP client, warmup, RTT logging
-│       ├── filter.rs       # Response safety filter
-│       └── logging.rs      # Async disk logger with timing breakdowns
-│
-├── client/                 # Python Unity bridge
-│   ├── client.py           # TCP bridge + TTS + RVC voice pipeline
-│   ├── tortoise_api.py     # Tortoise TTS via Gradio (alternative voice backend)
-│   └── teto.pth            # RVC voice model (not committed — add manually)
-│
-└── middleware/             # Rust encryption library
-    ├── Cargo.toml
-    └── src/
-        ├── lib.rs
-        └── encryption.rs   # AES-256-GCM encryption/decryption
-```
-
----
-
 ## Roadmap
 
 - [x] Rust TCP server with Ollama streaming integration
@@ -287,13 +202,6 @@ git push origin feature/your-feature
 ```
 
 Pull requests are welcome. Please open an issue first for major changes.
-
----
-
-## License
-
-This project is licensed under the **MIT License**.  
-You are free to use, modify, and distribute with attribution.
 
 ---
 
