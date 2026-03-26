@@ -174,36 +174,6 @@ From your Unity C# scripts, open a TCP connection to `127.0.0.1:12346`.
 
 ---
 
-## Project Structure
-
-```
-Neuromate/
-├── .env                    # Local config (not committed)
-├── README.md
-│
-├── server/                 # Rust AI server (monika-server)
-│   ├── Cargo.toml
-│   └── src/
-│       ├── main.rs         # TCP server, request handler, streaming orchestration
-│       ├── mood_engine.rs  # ELO mood tracking + sentiment analysis
-│       ├── ollama_http.rs  # Ollama HTTP client, warmup, RTT logging
-│       ├── filter.rs       # Response safety filter
-│       └── logging.rs      # Async disk logger with timing breakdowns
-│
-├── client/                 # Python Unity bridge
-│   ├── client.py           # TCP bridge + TTS + RVC voice pipeline
-│   ├── tortoise_api.py     # Tortoise TTS via Gradio (alternative voice backend)
-│   └── teto.pth            # RVC voice model (not committed — add manually)
-│
-└── middleware/             # Rust encryption library
-    ├── Cargo.toml
-    └── src/
-        ├── lib.rs
-        └── encryption.rs   # AES-256-GCM encryption/decryption
-```
-
----
-
 ## Roadmap
 
 - [x] Rust TCP server with Ollama streaming integration
@@ -232,13 +202,6 @@ git push origin feature/your-feature
 ```
 
 Pull requests are welcome. Please open an issue first for major changes.
-
----
-
-## License
-
-This project is licensed under the **MIT License**.  
-You are free to use, modify, and distribute with attribution.
 
 ---
 
