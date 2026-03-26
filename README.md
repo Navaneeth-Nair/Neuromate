@@ -128,36 +128,6 @@ cd Neuromate
 
 ---
 
-### 2. Configure Environment
-
-Create a `.env` file in the repo root:
-
-```env
-# Ollama
-OLLAMA_URL=http://127.0.0.1:11434/api/generate
-OLLAMA_MODEL=qwen2.5:7b
-OLLAMA_NUM_PREDICT=280
-OLLAMA_WARMUP=1
-OLLAMA_HEARTBEAT_SECS=60
-
-# Server
-SERVER_HOST=127.0.0.1
-SERVER_PORT=12345
-
-# Client Bridge (Unity side)
-UNITY_BRIDGE_HOST=127.0.0.1
-UNITY_BRIDGE_PORT=12346
-CLIENT_SOCKET_TIMEOUT_SECS=310
-ENABLE_TTS=1
-
-# Middleware Encryption
-MONIKA_SHARED_SECRET=your-strong-shared-secret
-MONIKA_NONCE_SIZE=12
-MONIKA_CIPHER_TYPE=aes256gcm
-```
-
----
-
 ### 3. Pull the Ollama Model
 
 ```bash
@@ -201,31 +171,6 @@ From your Unity C# scripts, open a TCP connection to `127.0.0.1:12346`.
 - Send: `[4-byte little-endian uint32 length][UTF-8 text bytes]`
 - Receive frames until a `[4-byte zero length]` EOF frame:
   - Each frame: `[4-byte length][JSON bytes]` → `{"text": "...", "audio": "/path/to/audio.wav"}`
-
----
-
-## Environment Variable Reference
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_URL` | `http://100.86.220.9:11434/api/generate` | Ollama generate endpoint |
-| `OLLAMA_USE_LOCAL` | `0` | Set `1` to force local Ollama base URL |
-| `OLLAMA_LOCAL_BASE` | `http://100.86.220.9:11434` | Used when `OLLAMA_USE_LOCAL=1` |
-| `OLLAMA_MODEL` | `qwen2.5:7b` | Model name to load in Ollama |
-| `OLLAMA_NUM_PREDICT` | `280` | Max tokens to generate per response |
-| `OLLAMA_NUM_CTX` | *(not set)* | Context window size override |
-| `OLLAMA_WARMUP` | `0` | Set `1` to prime model on server start |
-| `OLLAMA_HEARTBEAT_SECS` | `60` | Interval (s) for keep-alive pings |
-| `OLLAMA_HTTP_TIMEOUT_SECS` | `300` | HTTP timeout for Ollama requests |
-| `SERVER_HOST` | `127.0.0.1` | Rust server bind address |
-| `SERVER_PORT` | `12345` | Rust server port |
-| `UNITY_BRIDGE_HOST` | `127.0.0.1` | Python bridge bind address |
-| `UNITY_BRIDGE_PORT` | `12346` | Python bridge port |
-| `CLIENT_SOCKET_TIMEOUT_SECS` | `310` | Timeout for bridge→server socket |
-| `ENABLE_TTS` | `1` | Enable TTS+RVC pipeline (`0` to disable) |
-| `MONIKA_SHARED_SECRET` | `monika-e2e-shared-secret-v1-default` | AES-256 encryption key source |
-| `MONIKA_NONCE_SIZE` | `12` | GCM nonce size in bytes |
-| `MONIKA_CIPHER_TYPE` | `aes256gcm` | Cipher algorithm |
 
 ---
 
