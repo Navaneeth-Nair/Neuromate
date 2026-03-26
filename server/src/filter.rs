@@ -1,5 +1,5 @@
-// filter.rs
-// Simple harmful/self-harm content filter for AI responses
+
+
 
 const HARMFUL_PATTERNS: &[&str] = &[
     "kill yourself",
@@ -21,7 +21,7 @@ const HARMFUL_PATTERNS: &[&str] = &[
     "self-harm",
     "take your life",
     "you should not exist",
-    // Add more as needed
+    
 ];
 
 pub fn sanitize_response(response: &str) -> String {

@@ -12,8 +12,7 @@ use std::sync::Mutex;
 
 type DynError = Box<dyn std::error::Error + Send + Sync>;
 
-const REPLY_STYLE: &str = r#"Reply in a single paragraph only, with at most 5 sentences. Be concise. Do not use bullet lists or multiple paragraphs unless the user explicitly asks for them."#;
-
+const REPLY_STYLE: &str = "";
 mod logging;
 mod mood_engine;
 mod filter;
@@ -25,13 +24,13 @@ fn load_dotenv() {
     let _ = dotenv::dotenv();
 }
 
-/// Global session pool: HashMap of client_id -> last_activity_time
-/// Used to keep sessions alive and reuse model state across requests
+
+
 static SESSION_POOL: once_cell::sync::Lazy<Arc<Mutex<std::collections::HashMap<String, Instant>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(std::collections::HashMap::new())));
 
-/// Periodically run warmup probes to keep models loaded in Ollama memory.
-/// This prevents the model from being unloaded between requests.
+
+
 async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
     loop {
@@ -63,6 +62,7 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
         }
     }
 }
+
 
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
@@ -97,7 +97,7 @@ async fn main() -> Result<(), DynError> {
         }
     });
 
-    // ── Keep-alive heartbeat: every 60 seconds, ping Ollama to keep model loaded ──
+    
     let url_heartbeat = ollama_url.clone();
     let heartbeat_interval = env::var("OLLAMA_HEARTBEAT_SECS")
         .ok()
@@ -132,7 +132,7 @@ async fn main() -> Result<(), DynError> {
                     eprintln!("[monika] client connected from {}", addr);
                     let client_id = addr.to_string();
 
-                    // Update session heartbeat
+                    
                     {
                         let mut pool = SESSION_POOL.lock().unwrap();
                         pool.insert(client_id.clone(), Instant::now());
@@ -150,9 +150,9 @@ async fn main() -> Result<(), DynError> {
     Ok(())
 }
 
-/// Send a length-prefixed message frame over TCP.
-///
-/// Format: 4-byte little-endian length + body bytes
+
+
+
 async fn send_framed_message(socket: &mut TcpStream, body: &[u8]) -> Result<(), DynError> {
     socket.write_all(&(body.len() as u32).to_le_bytes()).await?;
     socket.write_all(body).await?;
@@ -160,7 +160,7 @@ async fn send_framed_message(socket: &mut TcpStream, body: &[u8]) -> Result<(), 
     Ok(())
 }
 
-/// Handle a single client connection.
+
 async fn handle_client(mut socket: TcpStream, ollama_url: &str, client_id: &str) -> Result<(), DynError> {
     match handle_request(&mut socket, ollama_url, client_id).await {
         Ok(()) => Ok(()),
@@ -174,7 +174,7 @@ async fn handle_client(mut socket: TcpStream, ollama_url: &str, client_id: &str)
     }
 }
 
-/// Format timing rows for display.
+
 fn fmt_timing_rows(rows: &[(&str, f64)]) -> String {
     let mut out = String::new();
     for (k, v) in rows {
@@ -183,11 +183,11 @@ fn fmt_timing_rows(rows: &[(&str, f64)]) -> String {
     out
 }
 
-/// Handle an incoming request: read question, stream from Ollama, send to client.
+
 async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &str) -> Result<(), DynError> {
     let wall = Instant::now();
 
-    // ── Read question ────────────────────────────────────────────────────────
+    
     let t = Instant::now();
     let mut length_bytes = [0u8; 4];
     socket.read_exact(&mut length_bytes).await?;
@@ -197,36 +197,36 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
     let question = String::from_utf8(question_bytes)?;
     let read_tcp_ms = t.elapsed().as_secs_f64() * 1000.0;
 
-    // ── Mood engine ──────────────────────────────────────────────────────────
+    
     let t = Instant::now();
-    let (mood, elo) = mood_engine::_j(client_id, &question).await;
+    let (mood, elo) = mood_engine::record_interaction(client_id, &question).await;
     let mood_ms = t.elapsed().as_secs_f64() * 1000.0;
 
     eprintln!("[monika] streaming from Ollama (mood={} elo={:.1}) …", mood, elo);
 
-    // ── Update session activity ──────────────────────────────────────────────
+    
     {
         let mut pool = SESSION_POOL.lock().unwrap();
         pool.insert(client_id.to_string(), Instant::now());
     }
 
-    // ── Stream Ollama → client ───────────────────────────────────────────────
+    
     let (raw_answer, om) =
         query_ollama_streaming(ollama_url, &question, &mood, socket).await?;
 
     let ollama_sum_ms = om.post_send_ms + om.stream_drain_ms;
 
-    // ── Filter (for logging; client already has the raw chunks) ─────────────
+    
     let t = Instant::now();
     let answer = filter::sanitize_response(&raw_answer);
     let filter_ms = t.elapsed().as_secs_f64() * 1000.0;
 
-    // ── EOF frame ────────────────────────────────────────────────────────────
+    
     let t = Instant::now();
     send_framed_message(socket, &[]).await?;
     let send_eof_ms = t.elapsed().as_secs_f64() * 1000.0;
 
-    // ── Disk log ─────────────────────────────────────────────────────────────
+    
     let timings_before_disk = format!(
         "{}{}",
         fmt_timing_rows(&[
@@ -291,16 +291,16 @@ struct OllamaMeta {
     ollama_reported_wall_ns: u64,
 }
 
-/// Query Ollama's /api/generate endpoint with streaming enabled.
-///
-/// Key points:
-/// - Sets "stream": true in payload to get NDJSON response
-/// - Uses reqwest's bytes_stream() to get a Tokio-compatible async byte stream
-/// - Each chunk from Ollama is sent as-is to the client
-/// - The client handles word-by-word display with proper spacing
-///
-/// The persistent HTTP client keeps the connection pool warm, reducing
-/// handshake latency on subsequent requests.
+
+
+
+
+
+
+
+
+
+
 async fn query_ollama_streaming(
     ollama_url: &str,
     question: &str,
@@ -314,7 +314,7 @@ async fn query_ollama_streaming(
         REPLY_STYLE, culture, question
     );
 
-    // ── Build payload ────────────────────────────────────────────────────────
+    
     let mut payload = json!({
         "model": model,
         "prompt": prompt,
@@ -346,7 +346,7 @@ async fn query_ollama_streaming(
         obj.insert("options".to_string(), options);
     }
 
-    // ── POST using the persistent pooled client ───────────────────────────────
+    
     let t_post = Instant::now();
     let response = ollama_http::client()
         .post(ollama_url)
@@ -356,14 +356,14 @@ async fn query_ollama_streaming(
         .error_for_status()?;
     let post_send_ms = t_post.elapsed().as_secs_f64() * 1000.0;
 
-    // ── Wrap byte-stream in an AsyncBufRead for line iteration ───────────────
+    
     let byte_stream = response
         .bytes_stream()
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
     let stream_reader = StreamReader::new(byte_stream);
     let mut lines = stream_reader.lines();
 
-    // ── Drain NDJSON stream, forwarding chunks to the client ──────────────────
+    
     let t_drain = Instant::now();
     let mut full_text = String::new();
     let mut prompt_tokens: u64 = 0;
@@ -377,7 +377,7 @@ async fn query_ollama_streaming(
             continue;
         }
 
-        // Parse each line as JSON
+        
         let chunk: serde_json::Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
@@ -389,18 +389,18 @@ async fn query_ollama_streaming(
         chunk_count += 1;
         let is_done = chunk["done"].as_bool().unwrap_or(false);
 
-        // Extract the generated fragment and send as-is
+        
         let fragment = chunk["response"].as_str().unwrap_or("").to_string();
         if !fragment.is_empty() {
             eprintln!("[monika] chunk #{}: got '{}' (done={})", chunk_count, fragment, is_done);
             full_text.push_str(&fragment);
-            // Send fragment as-is to client (preserving spaces)
+            
             send_framed_message(socket, fragment.as_bytes()).await?;
         } else {
             eprintln!("[monika] chunk #{}: empty response (done={})", chunk_count, is_done);
         }
 
-        // When done=true, grab final metadata and break
+        
         if is_done {
             prompt_tokens = chunk["prompt_eval_count"].as_u64().unwrap_or(0);
             output_tokens = chunk["eval_count"].as_u64().unwrap_or(0);

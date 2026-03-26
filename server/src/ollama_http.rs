@@ -21,19 +21,19 @@ static OLLAMA_HTTP: Lazy<Client> = Lazy::new(|| {
         .expect("reqwest client for Ollama")
 });
 
-/// Get the persistent, pooled HTTP client for Ollama requests.
-/// 
-/// The client reuses TCP connections across all requests via keep-alive,
-/// reducing handshake overhead and improving throughput.
+
+
+
+
 pub fn client() -> &'static Client {
     &OLLAMA_HTTP
 }
 
-/// Resolve the Ollama generate endpoint URL from environment variables.
-/// 
-/// Priority:
-/// 1. If OLLAMA_USE_LOCAL=1, use OLLAMA_LOCAL_BASE (default: http://100.86.220.9:11434)
-/// 2. Otherwise, use OLLAMA_URL (default: http://100.86.220.9:11434/api/generate)
+
+
+
+
+
 pub fn resolve_ollama_generate_url() -> String {
     if env::var("OLLAMA_USE_LOCAL").unwrap_or_default() == "1" {
         let base = env::var("OLLAMA_LOCAL_BASE")
@@ -48,9 +48,9 @@ pub fn resolve_ollama_generate_url() -> String {
     url
 }
 
-/// GET /api/tags round-trip time to diagnose slow Tailscale vs slow inference.
-/// 
-/// If RTT > 500ms, suggests running Ollama locally via OLLAMA_USE_LOCAL=1.
+
+
+
 pub async fn log_rtt_to_ollama(generate_url: &str) {
     let tags_url = generate_url.replace("/api/generate", "/api/tags");
     let t = std::time::Instant::now();
@@ -79,9 +79,9 @@ pub async fn log_rtt_to_ollama(generate_url: &str) {
     }
 }
 
-/// Optional one-token generation to pre-load the model before the first user message.
-/// 
-/// Enabled by setting OLLAMA_WARMUP=1. Useful for reducing latency on first request.
+
+
+
 pub async fn warmup_generate(ollama_url: &str) -> Result<(), DynError> {
     if env::var("OLLAMA_WARMUP").unwrap_or_default() != "1" {
         return Ok(());

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+
 import socket
 import struct
 import time
+import json
 import dotenv
 import os
 from pathlib import Path
@@ -9,18 +11,22 @@ import sys
 import warnings
 import threading
 import queue
-import winsound
 import tempfile
 import logging
 import io
 
-# Suppress noisy loggers before any imports that trigger them
 warnings.filterwarnings("ignore")
 for _logger_name in ("comtypes", "comtypes.client._code_cache", "fairseq",
                       "fairseq.tasks", "torch", "numba"):
     logging.getLogger(_logger_name).setLevel(logging.ERROR)
 
-# Import rvc_convert from local src/rvc-tts-pipe (uses fairseq, not faiss)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("monika-bridge")
+
 _rvc_pipe_dir = str(Path(__file__).resolve().parent.parent / "src" / "rvc-tts-pipe")
 _rvc_dir = str(Path(__file__).resolve().parent.parent / "src" / "rvc")
 for _d in (_rvc_pipe_dir, _rvc_dir):
@@ -29,188 +35,109 @@ for _d in (_rvc_pipe_dir, _rvc_dir):
 from rvc_infer import rvc_convert, rvc_init
 
 try:
-    import speech_recognition as sr
-except ImportError:
-    sr = None
-
-try:
     import pyttsx3
 except ImportError:
     pyttsx3 = None
 
-# Repo-root .env (works regardless of current working directory)
 dotenv.load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-# ==============================================================================
-# Pyttsx3 Threaded Pipeline
-# ==============================================================================
-class SimpleTTSPipeline:
-    """A threaded TTS pipeline to prevent audio from blocking the main chat interface."""
-    def __init__(self, auto_play=True):
-        self.q = queue.Queue()
-        self.auto_play = auto_play
-        self.running = True
-        self.task_counter = 0
-        
-        # Start background worker thread
-        self.thread = threading.Thread(target=self._worker, daemon=True)
-        self.thread.start()
+CLIENT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(CLIENT_DIR, "teto.pth")
+
+UNITY_HOST = os.getenv("UNITY_BRIDGE_HOST", "127.0.0.1")
+UNITY_PORT = int(os.getenv("UNITY_BRIDGE_PORT", "12346"))
+
+SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "12345"))
+
+
+class TTSPipeline:
+
+    def __init__(self):
+        self._q: queue.Queue = queue.Queue()
+        self._running = True
+        self._thread = threading.Thread(target=self._worker, daemon=True)
+        self._thread.start()
 
     def _worker(self):
-        """Worker thread that initializes and runs the pyttsx3 engine."""
-        # pyttsx3 must be initialized in the thread where it will run
         try:
             engine = pyttsx3.init()
-            # Use a female voice for cleaner RVC input
-            voices = engine.getProperty('voices')
+            voices = engine.getProperty("voices")
             for v in voices:
-                if 'female' in v.name.lower() or 'zira' in v.name.lower():
-                    engine.setProperty('voice', v.id)
+                if "female" in v.name.lower() or "zira" in v.name.lower():
+                    engine.setProperty("voice", v.id)
                     break
             else:
-                # Fallback: second voice is usually female on Windows
                 if len(voices) >= 2:
-                    engine.setProperty('voice', voices[1].id)
+                    engine.setProperty("voice", voices[1].id)
         except Exception as e:
-            print(f"\n[TTS Engine Error] Failed to initialize pyttsx3: {e}")
+            log.error("pyttsx3 init failed: %s", e)
             return
 
-        # Resolve paths relative to this script's directory (where teto.pth lives)
-        client_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(client_dir, "teto.pth")
-
-        # Pre-load RVC models once so first inference is fast
         try:
-            prev_cwd = os.getcwd()
-            os.chdir(client_dir)
-            _real_stdout, _real_stderr = sys.stdout, sys.stderr
-            sys.stdout = io.StringIO()
-            sys.stderr = io.StringIO()
+            prev = os.getcwd()
+            os.chdir(CLIENT_DIR)
+            _so, _se = sys.stdout, sys.stderr
+            sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
             try:
-                rvc_init(model_path)
+                rvc_init(MODEL_PATH)
             finally:
-                sys.stdout, sys.stderr = _real_stdout, _real_stderr
-                os.chdir(prev_cwd)
+                sys.stdout, sys.stderr = _so, _se
+                os.chdir(prev)
+            log.info("RVC model pre-loaded")
         except Exception as e:
-            print(f"[RVC] Model pre-load failed: {e}")
+            log.warning("RVC pre-load failed: %s", e)
 
-        while self.running:
+        while self._running:
             try:
-                text = self.q.get(timeout=0.5)
-                if text is None:  # Shutdown signal
+                item = self._q.get(timeout=0.5)
+                if item is None:
                     break
-                
-                # 1. Save pyttsx3 output to a temporary WAV file
-                tmp_wav = os.path.join(client_dir, "_tts_temp.wav")
-                engine.save_to_file(text, tmp_wav)
-                engine.runAndWait()
+                text, callback = item
 
-                # 2. Run RVC voice conversion with teto.pth
+                tmp_wav = os.path.join(CLIENT_DIR, "_tts_temp.wav")
+                output_path = None
+
                 try:
-                    # rvc_convert relies on os.getcwd() for hubert_base.pt,
-                    # rmvpe.pt and output dir – ensure we're in client_dir.
-                    prev_cwd = os.getcwd()
-                    os.chdir(client_dir)
-                    # Suppress all RVC internal prints so they don't
-                    # pollute the chat interface.
-                    _real_stdout, _real_stderr = sys.stdout, sys.stderr
-                    sys.stdout = io.StringIO()
-                    sys.stderr = io.StringIO()
+                    engine.save_to_file(text, tmp_wav)
+                    engine.runAndWait()
+
+                    prev = os.getcwd()
+                    os.chdir(CLIENT_DIR)
+                    _so, _se = sys.stdout, sys.stderr
+                    sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
                     try:
                         output_path = rvc_convert(
-                            model_path=model_path,
+                            model_path=MODEL_PATH,
                             input_path=tmp_wav,
                         )
                     finally:
-                        sys.stdout, sys.stderr = _real_stdout, _real_stderr
-                        os.chdir(prev_cwd)
-
-                    # 3. Play the converted WAV
-                    winsound.PlaySound(output_path, winsound.SND_FILENAME)
-                except Exception as rvc_err:
-                    print(f"\n[RVC Error] {rvc_err}")
+                        sys.stdout, sys.stderr = _so, _se
+                        os.chdir(prev)
+                except Exception as e:
+                    log.error("TTS/RVC error: %s", e)
                 finally:
-                    # Clean up the temp pyttsx3 wav
                     if os.path.exists(tmp_wav):
                         os.remove(tmp_wav)
 
-                self.q.task_done()
+                callback(output_path)
+                self._q.task_done()
+
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f"\n[TTS Worker Error] {e}")
+                log.error("TTS worker error: %s", e)
 
-    def speak(self, text):
-        """Queue the full text chunk to be spoken."""
-        if not self.auto_play or not text.strip():
-            return -1
-        
-        self.task_counter += 1
-        self.q.put(text)
-        return self.task_counter
+    def speak(self, text: str, callback):
+        self._q.put((text, callback))
 
     def shutdown(self):
-        """Cleanly shut down the TTS worker thread."""
-        self.running = False
-        self.q.put(None)
-        self.thread.join(timeout=2)
-
-# ==============================================================================
-# Client Logic
-# ==============================================================================
-
-_tts_pipeline = None
-
-def init_tts(enable_tts: bool = True, auto_play: bool = True):
-    """Initialize TTS Pipeline."""
-    global _tts_pipeline
-    
-    if not enable_tts:
-        print("ℹ  TTS disabled")
-        return None
-    
-    if pyttsx3 is None:
-        print(" TTS not available (install pyttsx3 for TTS support)")
-        return None
-
-    try:
-        _tts_pipeline = SimpleTTSPipeline(auto_play=auto_play)
-        print(" TTS Pipeline initialized")
-        return _tts_pipeline
-    except Exception as e:
-        print(f" TTS initialization failed: {e}")
-        return None
-
-def get_speech_online():
-    """Get speech using online speech recognition."""
-    try:
-        if sr is None:
-            print(" speech_recognition not installed")
-            return None
-            
-        recognizer = sr.Recognizer()
-        with sr.Microphone() as source:
-            print(" Listening...")
-            audio = recognizer.listen(source, timeout=10)
-        
-        try:
-            text = recognizer.recognize_google(audio)
-            print(f"  > {text}")
-            return text
-        except sr.UnknownValueError:
-            print(" Could not understand audio")
-            return None
-        except sr.RequestError as e:
-            print(f" Speech recognition error: {e}")
-            return None
-            
-    except Exception as e:
-        print(f" Error: {e}")
-        return None
+        self._running = False
+        self._q.put(None)
+        self._thread.join(timeout=3)
 
 
-def _recv_exact(sock, n):
-    """Read exactly n bytes from TCP stream (recv may return partial data)."""
+def _recv_exact(sock: socket.socket, n: int):
     buf = b""
     while len(buf) < n:
         chunk = sock.recv(n - len(buf))
@@ -220,186 +147,155 @@ def _recv_exact(sock, n):
     return buf
 
 
-def send_question(question, host=None, port=None):
-    """Send question to Monika TCP server and stream response."""
-    if host is None:
-        host = os.getenv("SERVER_HOST", "127.0.0.1")
-    if port is None:
-        port = int(os.getenv("SERVER_PORT", "12345"))
-
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def ask_monika(question: str) -> str | None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        client_socket.settimeout(float(os.getenv("CLIENT_SOCKET_TIMEOUT_SECS", "310")))
-        client_socket.connect((host, port))
+        timeout = float(os.getenv("CLIENT_SOCKET_TIMEOUT_SECS", "310"))
+        sock.settimeout(timeout)
+        sock.connect((SERVER_HOST, SERVER_PORT))
 
-        question_bytes = question.encode("utf-8")
-        client_socket.sendall(struct.pack("<I", len(question_bytes)))
-        client_socket.sendall(question_bytes)
+        q_bytes = question.encode("utf-8")
+        sock.sendall(struct.pack("<I", len(q_bytes)))
+        sock.sendall(q_bytes)
 
-        print("Assistant: ", end="", flush=True)
-        full_response = ""
-        buffer = ""
-        
+        full = ""
         while True:
-            length_data = _recv_exact(client_socket, 4)
-            if length_data is None:
-                print(f"\nError: connection closed before response length (is server running on {host}:{port}?)")
+            hdr = _recv_exact(sock, 4)
+            if hdr is None:
+                log.error("Server closed connection before response")
                 return None
-            
-            (length,) = struct.unpack("<I", length_data)
-            
+            (length,) = struct.unpack("<I", hdr)
             if length == 0:
-                if buffer:
-                    print(buffer, end="", flush=True)
                 break
-            
             if length > 32 * 1024 * 1024:
-                print(f"\nError: invalid frame length ({length})")
+                log.error("Invalid frame length: %d", length)
                 return None
-
-            frame_data = _recv_exact(client_socket, length)
-            if frame_data is None or len(frame_data) < length:
-                print("\nError: connection closed before full frame body")
+            frame = _recv_exact(sock, length)
+            if frame is None or len(frame) < length:
+                log.error("Incomplete frame")
                 return None
-            
-            chunk = frame_data.decode("utf-8")
-            full_response += chunk
-            buffer += chunk
-            
-            parts = buffer.split(" ")
-            
-            for word in parts[:-1]:
-                print(word + " ", end="", flush=True)
-            
-            buffer = parts[-1]
+            full += frame.decode("utf-8")
 
-        print() 
-        return full_response
-        
-    except socket.timeout:
-        print("\nError: timed out waiting for the server (Ollama may be slow or unreachable).")
-        return None
-    except OSError as e:
-        print(f"\nError: {e}")
-        return None
+        return full
     except Exception as e:
-        print(f"\nError: {e}")
+        log.error("ask_monika error: %s", e)
         return None
     finally:
-        client_socket.close()
+        sock.close()
 
+
+def _send_frame(conn: socket.socket, data: bytes):
+    conn.sendall(struct.pack("<I", len(data)))
+    conn.sendall(data)
+
+
+def _send_json(conn: socket.socket, payload: dict):
+    _send_frame(conn, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+
+def _send_end(conn: socket.socket):
+    conn.sendall(struct.pack("<I", 0))
+
+_busy_lock = threading.Lock()
+
+def handle_unity_connection(conn: socket.socket, addr, tts: TTSPipeline | None):
+    log.info("Unity connected from %s", addr)
+
+    if not _busy_lock.acquire(blocking=False):
+        log.warning("Rejecting connection from %s: already processing a request.", addr)
+        conn.close()
+        return
+
+    try:
+        hdr = _recv_exact(conn, 4)
+        if hdr is None:
+            return
+        (length,) = struct.unpack("<I", hdr)
+        if length == 0 or length > 1 * 1024 * 1024:
+            log.warning("Invalid speech length: %d", length)
+            return
+        raw = _recv_exact(conn, length)
+        if raw is None:
+            return
+        speech_text = raw.decode("utf-8").strip()
+        if not speech_text:
+            return
+
+        log.info("Player said: %s", speech_text)
+
+        t0 = time.perf_counter()
+        answer = ask_monika(speech_text)
+        elapsed = time.perf_counter() - t0
+
+        if answer is None:
+            _send_json(conn, {"text": "[No response from AI]", "audio": ""})
+            _send_end(conn)
+            return
+
+        log.info("AI replied in %.2fs: %s", elapsed, answer[:80])
+
+        audio_path = ""
+        if tts is not None and pyttsx3 is not None:
+            done_event = threading.Event()
+            result_holder = [None]
+
+            def on_tts_done(wav_path):
+                result_holder[0] = wav_path
+                done_event.set()
+
+            tts.speak(answer, on_tts_done)
+            done_event.wait(timeout=120)
+            if result_holder[0]:
+                audio_path = str(result_holder[0])
+
+        _send_json(conn, {"text": answer, "audio": audio_path})
+        _send_end(conn)
+
+        log.info("Response sent (audio=%s)", "yes" if audio_path else "no")
+
+    except Exception as e:
+        log.error("Connection handler error: %s", e)
+    finally:
+        _busy_lock.release()
+        conn.close()
 
 
 def main():
-    """Main client loop."""
-    print("=" * 50)
-    print("Monika Client - Text & TTS Interface")
-    print("=" * 50)
-    _h = os.getenv("SERVER_HOST", "127.0.0.1")
-    _p = int(os.getenv("SERVER_PORT", "12345"))
-    print(f"TCP server (Monika): {_h}:{_p}")
-    print("Replies are limited to about one paragraph (server prompt + token cap).")
-    
+    log.info("=" * 50)
+    log.info("Monika Unity Bridge")
+    log.info("=" * 50)
+    log.info("Listening for Unity on %s:%d", UNITY_HOST, UNITY_PORT)
+    log.info("Monika AI server at  %s:%d", SERVER_HOST, SERVER_PORT)
+
     enable_tts = os.getenv("ENABLE_TTS", "1").lower() in ("1", "true", "yes")
-    enable_voice = sr is not None and os.getenv("ENABLE_VOICE", "1").lower() in ("1", "true", "yes")
-    
     tts = None
-    if enable_tts:
-        tts = init_tts(enable_tts=True, auto_play=True)
-    
-    print("\nCommands:")
-    print("  'quit'    - Exit")
-    if enable_voice:
-        print("  'voice'   - Use voice input")
-    print("  'text'    - Use text input")
-    if tts:
-        print("  'tts on'  - Enable text-to-speech")
-        print("  'tts off' - Disable text-to-speech")
-    print("  'help'    - Show this help\n")
-    
-    input_mode = "text"
-    tts_enabled = enable_tts and tts is not None
-    
-    while True:
+    if enable_tts and pyttsx3 is not None:
         try:
-            if input_mode == "text":
-                user_input = input("You: ").strip()
-            else:
-                user_input = get_speech_online()
-                if user_input is None:
-                    print("Failed to capture speech. Switching to text mode.")
-                    input_mode = "text"
-                    continue
-                print(f"You: {user_input}")
-            
-            if user_input.lower() == 'quit':
-                print("Goodbye!")
-                break
-            elif user_input.lower() == 'help':
-                print("\nCommands:")
-                print("  'quit'    - Exit")
-                if enable_voice:
-                    print("  'voice'   - Use voice input")
-                print("  'text'    - Use text input")
-                if tts:
-                    print("  'tts on'  - Enable text-to-speech")
-                    print("  'tts off' - Disable text-to-speech")
-                print("  'help'    - Show this help\n")
-                continue
-            elif user_input.lower() == 'voice':
-                if enable_voice:
-                    input_mode = "voice"
-                    print(" Switched to voice input")
-                else:
-                    print(" Voice not available (install SpeechRecognition)")
-                continue
-            elif user_input.lower() == 'text':
-                input_mode = "text"
-                print("Switched to text input")
-                continue
-            elif user_input.lower() == 'tts on':
-                if tts:
-                    tts_enabled = True
-                    print(" Text-to-speech enabled")
-                else:
-                    print(" TTS not available")
-                continue
-            elif user_input.lower() == 'tts off':
-                tts_enabled = False
-                print(" Text-to-speech disabled")
-                continue
-            
-            if not user_input:
-                continue
-            
-            print("Waiting for response…")
-            t0 = time.perf_counter()
-            answer = send_question(user_input)
-            elapsed = time.perf_counter() - t0
-            
-            if answer is not None:
-                print(f"\n({elapsed:.2f}s)\n")
-                
-                if tts_enabled and tts:
-                    try:
-                        task_id = tts.speak(answer)
-                        print(f" Speech queued (task {task_id})")
-                    except Exception as e:
-                        print(f" TTS error: {e}")
-            else:
-                print(f"Failed to get response after {elapsed:.2f}s\n")
-                
-        except KeyboardInterrupt:
-            print("\nGoodbye!")
-            break
+            tts = TTSPipeline()
+            log.info("TTS + RVC pipeline ready")
         except Exception as e:
-            print(f"Error: {e}\n")
-    
-    if tts:
-        try:
+            log.warning("TTS init failed: %s", e)
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind((UNITY_HOST, UNITY_PORT))
+    server.listen(4)
+    log.info("Waiting for Unity connections...")
+
+    try:
+        while True:
+            conn, addr = server.accept()
+            t = threading.Thread(
+                target=handle_unity_connection, args=(conn, addr, tts), daemon=True
+            )
+            t.start()
+    except KeyboardInterrupt:
+        log.info("Shutting down...")
+    finally:
+        server.close()
+        if tts:
             tts.shutdown()
-        except:
-            pass
+
 
 if __name__ == "__main__":
     main()
