@@ -17,6 +17,7 @@ mod logging;
 mod mood_engine;
 mod filter;
 mod ollama_http;
+use monika_middleware::{encrypt_message, decrypt_message};
 
 fn load_dotenv() {
     let repo_env = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env");
@@ -68,14 +69,20 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
 async fn main() -> Result<(), DynError> {
     load_dotenv();
 
+    let enable_encryption = env::var("ENABLE_ENCRYPTION")
+        .map(|v| v == "1" || v.to_lowercase() == "true")
+        .unwrap_or(false);
+
     let ollama_url = ollama_http::resolve_ollama_generate_url();
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "12345".to_string());
     let bind_addr = format!("{}:{}", server_host, server_port);
 
     eprintln!(
-        "[monika] listening on {} | effective Ollama: {}",
-        bind_addr, ollama_url
+        "[monika] listening on {} | encryption: {} | effective Ollama: {}",
+        bind_addr,
+        if enable_encryption { "enabled" } else { "disabled" },
+        ollama_url
     );
     if ollama_url.contains("127.0.0.1") || ollama_url.contains("localhost") {
         eprintln!("[monika] Local Ollama — sub-second latency when model is loaded.");
