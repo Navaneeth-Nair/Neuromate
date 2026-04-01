@@ -69,20 +69,14 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
 async fn main() -> Result<(), DynError> {
     load_dotenv();
 
-    let enable_encryption = env::var("ENABLE_ENCRYPTION")
-        .map(|v| v == "1" || v.to_lowercase() == "true")
-        .unwrap_or(false);
-
     let ollama_url = ollama_http::resolve_ollama_generate_url();
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "12345".to_string());
     let bind_addr = format!("{}:{}", server_host, server_port);
 
     eprintln!(
-        "[monika] listening on {} | encryption: {} | effective Ollama: {}",
-        bind_addr,
-        if enable_encryption { "enabled" } else { "disabled" },
-        ollama_url
+        "[monika] listening on {} | encryption: mandatory | effective Ollama: {}",
+        bind_addr, ollama_url
     );
     if ollama_url.contains("127.0.0.1") || ollama_url.contains("localhost") {
         eprintln!("[monika] Local Ollama — sub-second latency when model is loaded.");
@@ -201,7 +195,18 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
     let question_length = u32::from_le_bytes(length_bytes) as usize;
     let mut question_bytes = vec![0u8; question_length];
     socket.read_exact(&mut question_bytes).await?;
-    let question = String::from_utf8(question_bytes)?;
+    
+    let question = match decrypt_message(&question_bytes) {
+        Ok(s) => {
+            eprintln!("[monika] decrypted incoming message ({} bytes)", question_bytes.len());
+            s
+        }
+        Err(e) => {
+            eprintln!("[monika] decryption failed: {}", e);
+            return Err(format!("Decryption failed: {}. Ensure MONIKA_SHARED_SECRET matches on client and server.", e).into());
+        }
+    };
+    
     let read_tcp_ms = t.elapsed().as_secs_f64() * 1000.0;
 
     
@@ -402,7 +407,18 @@ async fn query_ollama_streaming(
             eprintln!("[monika] chunk #{}: got '{}' (done={})", chunk_count, fragment, is_done);
             full_text.push_str(&fragment);
             
-            send_framed_message(socket, fragment.as_bytes()).await?;
+            let payload = match encrypt_message(&fragment) {
+                Ok(encrypted) => {
+                    eprintln!("[monika] encrypted response chunk ({} bytes)", encrypted.len());
+                    encrypted
+                }
+                Err(e) => {
+                    eprintln!("[monika] encryption failed: {}", e);
+                    return Err(format!("Encryption failed: {}", e).into());
+                }
+            };
+            
+            send_framed_message(socket, &payload).await?;
         } else {
             eprintln!("[monika] chunk #{}: empty response (done={})", chunk_count, is_done);
         }
