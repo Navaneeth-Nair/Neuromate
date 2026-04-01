@@ -16,7 +16,14 @@ NONCE_SIZE = 12
 
 
 def get_shared_secret() -> str:
-    return os.getenv("MONIKA_SHARED_SECRET", "monika-e2e-shared-secret-v1-default")
+    secret = os.getenv("MONIKA_SHARED_SECRET")
+    if secret is None:
+        raise ValueError("MONIKA_SHARED_SECRET environment variable is required")
+    if len(secret) < 16:
+        raise ValueError(
+            "MONIKA_SHARED_SECRET must be at least 16 characters for security"
+        )
+    return secret
 
 
 def derive_key(secret: str) -> bytes:

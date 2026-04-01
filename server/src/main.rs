@@ -69,6 +69,13 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
 async fn main() -> Result<(), DynError> {
     load_dotenv();
 
+    let secret = env::var("MONIKA_SHARED_SECRET")
+        .expect("MONIKA_SHARED_SECRET is required for encrypted communication");
+    if secret.len() < 16 {
+        panic!("MONIKA_SHARED_SECRET must be at least 16 characters for security");
+    }
+    eprintln!("[monika] encryption key validated ({} chars)", secret.len());
+
     let ollama_url = ollama_http::resolve_ollama_generate_url();
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "12345".to_string());
@@ -196,9 +203,11 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
     let mut question_bytes = vec![0u8; question_length];
     socket.read_exact(&mut question_bytes).await?;
     
+    let decrypt_t = Instant::now();
     let question = match decrypt_message(&question_bytes) {
         Ok(s) => {
-            eprintln!("[monika] decrypted incoming message ({} bytes)", question_bytes.len());
+            let decrypt_ms = decrypt_t.elapsed().as_secs_f64() * 1000.0;
+            eprintln!("[monika] decrypted incoming message ({} bytes) in {:.2}ms", question_bytes.len(), decrypt_ms);
             s
         }
         Err(e) => {
@@ -407,9 +416,11 @@ async fn query_ollama_streaming(
             eprintln!("[monika] chunk #{}: got '{}' (done={})", chunk_count, fragment, is_done);
             full_text.push_str(&fragment);
             
+            let encrypt_t = Instant::now();
             let payload = match encrypt_message(&fragment) {
                 Ok(encrypted) => {
-                    eprintln!("[monika] encrypted response chunk ({} bytes)", encrypted.len());
+                    let encrypt_ms = encrypt_t.elapsed().as_secs_f64() * 1000.0;
+                    eprintln!("[monika] encrypted response chunk ({} bytes) in {:.2}ms", encrypted.len(), encrypt_ms);
                     encrypted
                 }
                 Err(e) => {
