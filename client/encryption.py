@@ -15,7 +15,7 @@ dotenv.load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 NONCE_SIZE = 12
 
 
-def get_shared_secret() -> str:
+def _init_aesgcm() -> AESGCM:
     secret = os.getenv("MONIKA_SHARED_SECRET")
     if secret is None:
         raise ValueError("MONIKA_SHARED_SECRET environment variable is required")
@@ -23,43 +23,24 @@ def get_shared_secret() -> str:
         raise ValueError(
             "MONIKA_SHARED_SECRET must be at least 16 characters for security"
         )
-    return secret
+    key = hashlib.sha256(secret.encode()).digest()
+    return AESGCM(key)
 
 
-def derive_key(secret: str) -> bytes:
-    return hashlib.sha256(secret.encode()).digest()
-
-
-class Encryption:
-    def __init__(self):
-        secret = get_shared_secret()
-        self.key = derive_key(secret)
-        self.nonce_size = NONCE_SIZE
-
-    def encrypt(self, plaintext: bytes) -> bytes:
-        nonce = os.urandom(self.nonce_size)
-        aesgcm = AESGCM(self.key)
-        ciphertext = aesgcm.encrypt(nonce, plaintext, None)
-        return nonce + ciphertext
-
-    def decrypt(self, encrypted: bytes) -> bytes:
-        if len(encrypted) < self.nonce_size:
-            raise ValueError("Encrypted data too short")
-        nonce = encrypted[: self.nonce_size]
-        ciphertext = encrypted[self.nonce_size :]
-        aesgcm = AESGCM(self.key)
-        return aesgcm.decrypt(nonce, ciphertext, None)
-
-    def encrypt_str(self, plaintext: str) -> bytes:
-        return self.encrypt(plaintext.encode("utf-8"))
-
-    def decrypt_str(self, encrypted: bytes) -> str:
-        return self.decrypt(encrypted).decode("utf-8")
+_AESGCM_INSTANCE = _init_aesgcm()
 
 
 def encrypt_message(message: str) -> bytes:
-    return Encryption().encrypt_str(message)
+    plaintext = message.encode("utf-8")
+    nonce = os.urandom(NONCE_SIZE)
+    ciphertext = _AESGCM_INSTANCE.encrypt(nonce, plaintext, None)
+    return nonce + ciphertext
 
 
 def decrypt_message(encrypted: bytes) -> str:
-    return Encryption().decrypt_str(encrypted)
+    if len(encrypted) < NONCE_SIZE:
+        raise ValueError("Encrypted data too short")
+    nonce = encrypted[: NONCE_SIZE]
+    ciphertext = encrypted[NONCE_SIZE :]
+    plaintext = _AESGCM_INSTANCE.decrypt(nonce, ciphertext, None)
+    return plaintext.decode("utf-8")
