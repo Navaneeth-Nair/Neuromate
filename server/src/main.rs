@@ -17,6 +17,7 @@ mod logging;
 mod mood_engine;
 mod filter;
 mod ollama_http;
+use monika_middleware::{encrypt_message, decrypt_message};
 
 fn load_dotenv() {
     let repo_env = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.env");
@@ -69,13 +70,20 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
 async fn main() -> Result<(), DynError> {
     load_dotenv();
 
+    let secret = env::var("MONIKA_SHARED_SECRET")
+        .expect("MONIKA_SHARED_SECRET is required for encrypted communication");
+    if secret.len() < 16 {
+        panic!("MONIKA_SHARED_SECRET must be at least 16 characters for security");
+    }
+    eprintln!("[monika] encryption key validated ({} chars)", secret.len());
+
     let ollama_url = ollama_http::resolve_ollama_generate_url();
     let server_host = env::var("SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
     let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "12345".to_string());
     let bind_addr = format!("{}:{}", server_host, server_port);
 
     eprintln!(
-        "[monika] listening on {} | effective Ollama: {}",
+        "[monika] listening on {} | encryption: mandatory | effective Ollama: {}",
         bind_addr, ollama_url
     );
     if ollama_url.contains("127.0.0.1") || ollama_url.contains("localhost") {
@@ -195,7 +203,20 @@ async fn handle_request(socket: &mut TcpStream, ollama_url: &str, client_id: &st
     let question_length = u32::from_le_bytes(length_bytes) as usize;
     let mut question_bytes = vec![0u8; question_length];
     socket.read_exact(&mut question_bytes).await?;
-    let question = String::from_utf8(question_bytes)?;
+    
+    let decrypt_t = Instant::now();
+    let question = match decrypt_message(&question_bytes) {
+        Ok(s) => {
+            let decrypt_ms = decrypt_t.elapsed().as_secs_f64() * 1000.0;
+            eprintln!("[monika] decrypted incoming message ({} bytes) in {:.2}ms", question_bytes.len(), decrypt_ms);
+            s
+        }
+        Err(e) => {
+            eprintln!("[monika] decryption failed: {}", e);
+            return Err(format!("Decryption failed: {}. Ensure MONIKA_SHARED_SECRET matches on client and server.", e).into());
+        }
+    };
+    
     let read_tcp_ms = t.elapsed().as_secs_f64() * 1000.0;
 
     
@@ -396,7 +417,20 @@ async fn query_ollama_streaming(
             eprintln!("[monika] chunk #{}: got '{}' (done={})", chunk_count, fragment, is_done);
             full_text.push_str(&fragment);
             
-            send_framed_message(socket, fragment.as_bytes()).await?;
+            let encrypt_t = Instant::now();
+            let payload = match encrypt_message(&fragment) {
+                Ok(encrypted) => {
+                    let encrypt_ms = encrypt_t.elapsed().as_secs_f64() * 1000.0;
+                    eprintln!("[monika] encrypted response chunk ({} bytes) in {:.2}ms", encrypted.len(), encrypt_ms);
+                    encrypted
+                }
+                Err(e) => {
+                    eprintln!("[monika] encryption failed: {}", e);
+                    return Err(format!("Encryption failed: {}", e).into());
+                }
+            };
+            
+            send_framed_message(socket, &payload).await?;
         } else {
             eprintln!("[monika] chunk #{}: empty response (done={})", chunk_count, is_done);
         }

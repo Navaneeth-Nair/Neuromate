@@ -14,14 +14,22 @@ import queue
 import tempfile
 import logging
 import io
+from encryption import encrypt_message, decrypt_message
+
 import subprocess
 import signal
 import requests
 from noise_cancel import process_audio
 from playsound import playsound
 warnings.filterwarnings("ignore")
-for _logger_name in ("comtypes", "comtypes.client._code_cache", "fairseq",
-                      "fairseq.tasks", "torch", "numba"):
+for _logger_name in (
+    "comtypes",
+    "comtypes.client._code_cache",
+    "fairseq",
+    "fairseq.tasks",
+    "torch",
+    "numba",
+):
     logging.getLogger(_logger_name).setLevel(logging.ERROR)
 
 logging.basicConfig(
@@ -101,8 +109,8 @@ def stop_whisper_server(proc):
         proc.kill()
 
 
-class TTSPipeline:
 
+class TTSPipeline:
     def __init__(self):
         self._q: queue.Queue = queue.Queue()
         self._running = True
@@ -273,7 +281,7 @@ def ask_monika(question: str) -> str | None:
         sock.settimeout(timeout)
         sock.connect((SERVER_HOST, SERVER_PORT))
 
-        q_bytes = question.encode("utf-8")
+        q_bytes = encrypt_message(question)
         sock.sendall(struct.pack("<I", len(q_bytes)))
         sock.sendall(q_bytes)
 
@@ -293,7 +301,8 @@ def ask_monika(question: str) -> str | None:
             if frame is None or len(frame) < length:
                 log.error("Incomplete frame")
                 return None
-            full += frame.decode("utf-8")
+            decrypted = decrypt_message(frame)
+            full += decrypted
 
         return full
     except Exception as e:
@@ -315,7 +324,9 @@ def _send_json(conn: socket.socket, payload: dict):
 def _send_end(conn: socket.socket):
     conn.sendall(struct.pack("<I", 0))
 
+
 _busy_lock = threading.Lock()
+
 
 def handle_unity_connection(conn: socket.socket, addr, tts: TTSPipeline | None):
     global UNITY_CONNECTED

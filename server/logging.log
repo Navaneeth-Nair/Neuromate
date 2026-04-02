@@ -1,0 +1,48 @@
+[2026-03-31 07:59:13] Q: Hello, how are you? [mood=neutral elo=1600.0]
+A: Hello! I'm just a computer program, so I don't have feelings, but I'm here and ready to help you with any questions or tasks you might have. How can I assist you today?
+Timings (ms):
+  read_tcp                         1.86
+  mood_engine                      0.10
+  ollama_http_send              2403.72
+  ollama_stream_drain          10158.98
+  ollama_http_sum              12562.70
+  filter                           0.05
+  send_eof                         0.09
+  (Ollama API) prompt_tokens:             44
+  (Ollama API) output_tokens:            42
+  (Ollama API) reported_wall_s:      12.404
+  disk_log                         8.27
+  total_wall_ms                12574.93
+
+[2026-04-02 00:11:40] Q: Hello, how are you? [mood=neutral elo=1600.0]
+A: Hello! I'm an AI assistant created by Alibaba Cloud, so I don't have feelings or personal experiences. How can I assist you today?
+Timings (ms):
+  read_tcp                         3.97
+  mood_engine                      2.11
+  ollama_http_send             10790.54
+  ollama_stream_drain           7131.87
+  ollama_http_sum              17922.41
+  filter                           0.02
+  send_eof                         0.05
+  (Ollama API) prompt_tokens:             44
+  (Ollama API) output_tokens:            30
+  (Ollama API) reported_wall_s:      17.749
+  disk_log                         1.93
+  total_wall_ms                17935.48
+
+[2026-04-02 00:34:41] Q: Hello, how are you? [mood=neutral elo=1600.0]
+A: Hello! I'm just a computer program, so I don't have feelings, but I'm here and ready to help you with any questions or tasks you might have. How can I assist you today?
+Timings (ms):
+  read_tcp                         4.04
+  mood_engine                      1.01
+  ollama_http_send              2439.57
+  ollama_stream_drain          10120.51
+  ollama_http_sum              12560.09
+  filter                           1.04
+  send_eof                         0.09
+  (Ollama API) prompt_tokens:             44
+  (Ollama API) output_tokens:            42
+  (Ollama API) reported_wall_s:      12.425
+  disk_log                         5.45
+  total_wall_ms                12577.28
+
