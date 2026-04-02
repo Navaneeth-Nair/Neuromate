@@ -65,6 +65,7 @@ async fn session_heartbeat_task(ollama_url: String, interval_secs: u64) {
 }
 
 
+
 #[tokio::main]
 async fn main() -> Result<(), DynError> {
     load_dotenv();
