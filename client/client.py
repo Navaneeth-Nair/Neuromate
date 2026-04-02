@@ -15,7 +15,7 @@ import tempfile
 import logging
 import io
 
-from encryption import Encryption
+from encryption import encrypt_message, decrypt_message
 
 warnings.filterwarnings("ignore")
 for _logger_name in (
@@ -58,7 +58,6 @@ UNITY_PORT = int(os.getenv("UNITY_BRIDGE_PORT", "12346"))
 SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "12345"))
 
-_encryption = Encryption()
 
 
 class TTSPipeline:
@@ -163,7 +162,7 @@ def ask_monika(question: str) -> str | None:
         sock.settimeout(timeout)
         sock.connect((SERVER_HOST, SERVER_PORT))
 
-        q_bytes = _encryption.encrypt_str(question)
+        q_bytes = encrypt_message(question)
         sock.sendall(struct.pack("<I", len(q_bytes)))
         sock.sendall(q_bytes)
 
@@ -183,7 +182,7 @@ def ask_monika(question: str) -> str | None:
             if frame is None or len(frame) < length:
                 log.error("Incomplete frame")
                 return None
-            decrypted = _encryption.decrypt(frame)
+            decrypted = decrypt_message(frame)
             full += decrypted
 
         return full
