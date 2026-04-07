@@ -1,9 +1,8 @@
-
-
 import socket
 import struct
 import time
 import json
+import base64
 import dotenv
 import os
 from pathlib import Path
@@ -53,6 +52,11 @@ UNITY_PORT = int(os.getenv("UNITY_BRIDGE_PORT", "12346"))
 
 SERVER_HOST = os.getenv("SERVER_HOST", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "12345"))
+
+# Where Unity reads audio from at runtime (StreamingAssets is always accessible on disk)
+STREAMING_ASSETS_PATH = os.getenv("UNITY_STREAMING_ASSETS_PATH", os.path.join(CLIENT_DIR, "output"))
+VOICE_OUTPUT_PATH = os.path.join(STREAMING_ASSETS_PATH, "monika_response.wav").replace("\\", "/")
+log.info("Voice output path: %s", VOICE_OUTPUT_PATH)
 
 UNITY_CONNECTED = False
 UNITY_CONNECTED_LOCK = threading.Lock()
@@ -145,40 +149,72 @@ class TTSPipeline:
                     break
                 text, callback = item
 
-                tmp_wav = os.path.join(CLIENT_DIR, "_tts_temp.wav")
+                # Use unique temp file to avoid "file is being used" deadlocks between requests
+                fd, tmp_wav = tempfile.mkstemp(suffix=".wav", dir=CLIENT_DIR)
+                os.close(fd) 
+                
                 output_path = None
 
                 try:
+                    log.info("[TTS] Step 1: Generating base speech for '%s...'", text[:30])
                     engine.save_to_file(text, tmp_wav)
                     engine.runAndWait()
+                    log.info("[TTS] Step 1: Base speech generated successfully.")
 
-                    prev = os.getcwd()
-                    os.chdir(CLIENT_DIR)
-                    _so, _se = sys.stdout, sys.stderr
-                    sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+                    # Generate a unique path in StreamingAssets to avoid file lock issues with Unity
+                    unique_name = f"monika_resp_{int(time.time())}_{os.getpid()}.wav"
+                    target_path = os.path.join(STREAMING_ASSETS_PATH, unique_name).replace("\\", "/")
+
                     try:
+                        log.info("[RVC] Step 2: Starting inference for %s", unique_name)
+                        # Call RVC directly without stdout redirection to avoid hiding errors
                         output_path = rvc_convert(
                             model_path=MODEL_PATH,
                             input_path=tmp_wav,
                         )
-                    finally:
-                        sys.stdout, sys.stderr = _so, _se
-                        os.chdir(prev)
+                        log.info("[RVC] Step 2: Inference finished successfully.")
+                    except Exception as rvc_err:
+                        log.error("[TTS] rvc_convert failed: %s", rvc_err)
+                        output_path = None
 
+                    log.info("[TTS] rvc_convert returned: %s", output_path)
+                    
                     if output_path and os.path.exists(output_path):
-                        log.info("RVC audio generated successfully at: %s", output_path)
                         try:
-                            playsound(output_path)
-                        except Exception as play_err:
-                            log.error("Failed to play audio: %s", play_err)
-                        finally:
+                            from pydub import AudioSegment
+                            os.makedirs(STREAMING_ASSETS_PATH, exist_ok=True)
+                            
+                            log.info("[TTS] Resampling to 48kHz...")
+                            audio = AudioSegment.from_wav(output_path)
+                            audio = audio.set_frame_rate(48000)
+                            audio.export(target_path, format="wav")
+                            
+                            if os.path.exists(output_path):
+                                os.remove(output_path)
+                            
+                            output_path = target_path
+                            log.info("[TTS] Audio resampled and saved to unique path: %s", target_path)
+
+                            # --- WORKAROUND: Play sound from Python side ---
+                            def play_async(p):
+                                try:
+                                    from playsound import playsound
+                                    playsound(p)
+                                except Exception as e:
+                                    log.error("[TTS] playsound failed: %s", e)
+                            
+                            threading.Thread(target=play_async, args=(target_path,), daemon=True).start()
+                        except Exception as resample_err:
+                            log.error("[TTS] Resampling failed, falling back to copy: %s", resample_err)
                             try:
-                                if os.path.exists(output_path):
-                                    os.remove(output_path)
-                                    log.info("Deleted %s to prevent pileup", output_path)
-                            except Exception as e:
-                                log.error("Failed to delete output audio: %s", e)
-                            output_path = ""
+                                import shutil
+                                shutil.copy2(output_path, target_path)
+                                output_path = target_path
+                            except:
+                                output_path = ""
+                    else:
+                        log.error("[TTS] output_path is None or missing! RVC failed.")
+                        output_path = ""
 
                 except Exception as e:
                     log.error("TTS/RVC error: %s", e)
@@ -315,6 +351,15 @@ def _send_json(conn: socket.socket, payload: dict):
 def _send_end(conn: socket.socket):
     conn.sendall(struct.pack("<I", 0))
 
+
+def _encode_audio_file_base64(audio_path: str) -> str:
+    try:
+        with open(audio_path, "rb") as f:
+            return base64.b64encode(f.read()).decode("ascii")
+    except Exception as e:
+        log.error("Failed to base64-encode audio file '%s': %s", audio_path, e)
+        return ""
+
 _busy_lock = threading.Lock()
 
 def handle_unity_connection(conn: socket.socket, addr, tts: TTSPipeline | None):
@@ -369,15 +414,15 @@ def handle_unity_connection(conn: socket.socket, addr, tts: TTSPipeline | None):
         t0 = time.perf_counter()
         answer = ask_monika(speech_text)
         elapsed = time.perf_counter() - t0
+        audio_payload = ""
 
         if answer is None:
             log.warning("Server not available, sending recognized speech text instead")
             answer = speech_text  
-            audio_path = ""
         else:
             log.info("AI replied in %.2fs: %s", elapsed, answer[:80])
 
-            audio_path = ""
+            log.info("[TTS-CHECK] tts=%s, pyttsx3=%s", tts, pyttsx3)
             if tts is not None and pyttsx3 is not None:
                 done_event = threading.Event()
                 result_holder = [None]
@@ -388,14 +433,15 @@ def handle_unity_connection(conn: socket.socket, addr, tts: TTSPipeline | None):
 
                 tts.speak(answer, on_tts_done)
                 done_event.wait(timeout=120)
+                log.info("[TTS-CHECK] result_holder[0]=%s", result_holder[0])
                 if result_holder[0]:
-                    audio_path = str(result_holder[0])
+                    audio_payload = str(result_holder[0])
 
-        _send_json(conn, {"text": answer, "audio": audio_path})
+        _send_json(conn, {"text": answer, "audio": audio_payload})
         _send_end(conn)
 
-        log.info("Unity response completed, audio in response: %s, audio_path='%s'", "yes" if audio_path else "no", audio_path)
-        log.info("Response sent (audio=%s)", "yes" if audio_path else "no")
+        log.info("Unity response completed, audio in response: %s, audio_b64_len=%d", "yes" if audio_payload else "no", len(audio_payload) if audio_payload else 0)
+        log.info("Response sent (audio=%s)", "yes" if audio_payload else "no")
 
     except Exception as e:
         log.error("Connection handler error: %s", e)

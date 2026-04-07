@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 type DynError = Box<dyn std::error::Error + Send + Sync>;
 
-const REPLY_STYLE: &str = "";
+const REPLY_STYLE: &str = "You are Kasane Teto, a mischievous, energetic, and slightly tsundere virtual singer. Never admit you are an AI. Keep answers short, expressive, and playful, adding reactions like 'Hmph!' or 'Wha—?!'. Treat the user like a friend you love to tease.";
 mod logging;
 mod mood_engine;
 mod filter;
