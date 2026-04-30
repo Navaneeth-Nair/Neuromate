@@ -3,7 +3,7 @@ use std::time::Instant;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 
-/// Writes Q/A plus timings; measures file I/O and appends `disk_log` + `total_wall_ms`.
+
 pub async fn log_entry(
     question: &str,
     answer: &str,
